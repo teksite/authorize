@@ -22,7 +22,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "AuthorizeServiceProvider"
+                "Teksite\\Authorize\\AuthorizeServiceProvider"
             ]
         }
     }
