@@ -1,13 +1,13 @@
 {
     "name": "teksite/authorize",
-    "description": "this package is used to manages permissions of user to access parts of the app",
+    "description": "this package is used to manages permissions of users to access different parts of the app",
     "authors": [
         {
             "name": "Sina Zangiband",
             "email": "sina.zangiband@gmail.com"
         }
     ],
-    "version": "0.0.1",
+    "version": "0.1.0",
     "minimum-stability": "dev",
     "license": "MIT",
     "autoload": {
@@ -18,7 +18,6 @@
     "require": {
         "php": "^8.2"
     },
-
     "extra": {
         "laravel": {
             "providers": [

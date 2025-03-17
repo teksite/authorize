@@ -19,7 +19,7 @@ return new class extends Migration
         });
         Schema::create('auth_permission_models', function (Blueprint $table) {
             $table->foreignId('permission_id')->constrained('auth_permissions')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->uuidMorphs('model');
+            $table->morphs('model');
         });
     }
 

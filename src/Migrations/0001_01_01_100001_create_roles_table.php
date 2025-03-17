@@ -26,7 +26,7 @@ return new class extends Migration
 
         Schema::create('auth_role_models', function (Blueprint $table) {
             $table->foreignId('role_id')->constrained('auth_roles')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->uuidMorphs('model');
+            $table->morphs('model');
         });
     }
 
@@ -36,6 +36,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('auth_role_models');
+        Schema::dropIfExists('auth_permission_role');
         Schema::dropIfExists('auth_roles');
     }
 };
