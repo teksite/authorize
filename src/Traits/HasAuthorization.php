@@ -2,7 +2,9 @@
 
 namespace Teksite\Authorize\Traits;
 
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
+use Lareon\CMS\App\Models\User;
 use Teksite\Authorize\Models\Permission;
 use Teksite\Authorize\Models\Role;
 
@@ -45,16 +47,18 @@ trait HasAuthorization
     public function assignRole(array|string|Role $roles, bool $detaching = true): void
     {
         $roleIds = [];
-
         // Ensure roles are an array
         $roles = is_array($roles) ? $roles : [$roles];
 
         foreach ($roles as $role) {
-            if (is_string($role)) {
-                $role = Role::query()->where('title', $role)->firstOrFail(['id']);
-            }
             if ($role instanceof Role) {
                 $roleIds[] = $role->id;
+            }elseif (is_numeric($role)) {
+                $role = Role::query()->where('id', $role)->first(['id']);
+                if ($role) $roleIds[]= $role->id;
+            }else{
+                $role = Role::query()->where('title', $role)->first(['id']);
+                if ($role) $roleIds[]= $role->id;
             }
         }
 
@@ -118,6 +122,39 @@ trait HasAuthorization
         return $this->roles->map(function ($role) {
             return $role->permissions;
         })->flatten()->merge($this->permissions)->unique('id');
+    }
+
+
+    /**
+     * @param bool $min
+     * @param bool $max
+     * @param User|null $user
+     * @return array|float|null
+     */
+    public static function hierarchy(bool $min = true, bool $max = false ,null|User $user = null): array|float|null
+    {
+        $user =$user ?? auth()->user(); if (!$user) return null;
+
+        $hierarchy['min'] = $user->roles()->min('hierarchy');
+        $hierarchy['max'] = $user->roles()->max('hierarchy');
+        if ($min && $max === false) {
+            return $hierarchy['min'];
+        } elseif ($min === false && $max) {
+            return $hierarchy['max'];
+        }
+        return $hierarchy;
+    }
+
+
+    /**
+     * @param User|null $user
+     * @return \Illuminate\Database\Eloquent\Collection|null
+     */
+    public static function hierarchyRoles(null|User $user = null): ?\Illuminate\Database\Eloquent\Collection
+    {
+        $user =$user ?? auth()->user(); if (!$user) return null;
+        $hierarchy['min'] = $user->roles()->min('hierarchy');
+        return Role::query()->where('hierarchy','>',$hierarchy)->select(['id' ,'title'])->get();
     }
 
 
