@@ -86,8 +86,7 @@ trait HasAuthorization
 
         if (empty($roleIds))  return false;
 
-        // If $any is true, check if at least one role exists
-        // If $any is false, check if all roles exist
+
         $query = $this->roles()->whereIn('id', $roleIds);
 
         return $any ? $query->exists() : $query->count() === count($roleIds);
@@ -100,7 +99,6 @@ trait HasAuthorization
      */
     public function hasPermission(string|int|Permission $permission): bool
     {
-
         if (is_string($permission)) {
             $permission = Permission::query()->where('title', $permission)->with('roles', function ($query) {
                 $query->select(['title', 'id']);
