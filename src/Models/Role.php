@@ -5,6 +5,7 @@ namespace Teksite\Authorize\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Lareon\CMS\App\Models\User;
 
 class Role extends Model
 {
@@ -32,6 +33,11 @@ class Role extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'auth_permission_role');
+    }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class , 'auth_permission_role');
     }
 
 }
