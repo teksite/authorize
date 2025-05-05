@@ -10,11 +10,9 @@ use Teksite\Authorize\Models\Role;
 
 trait HasAuthorization
 {
-
     public function permissions()
     {
         return $this->morphToMany(Permission::class, 'model', 'auth_permission_models');
-
     }
 
 

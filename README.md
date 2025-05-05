@@ -9,7 +9,6 @@ The related model (like User) can have permissions directly or through its roles
 Sina Zangiband
 
 ### Contact
-- Website: [laratek.ir](https://laratek.ir)
 - Alternate Website: [teksite.net](https://teksite.net)
 
 ---
