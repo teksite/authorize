@@ -7,7 +7,7 @@
             "email": "sina.zangiband@gmail.com"
         }
     ],
-    "version": "0.1.0",
+    "version": "1.0.0",
     "minimum-stability": "dev",
     "license": "MIT",
     "autoload": {
@@ -16,7 +16,8 @@
         }
     },
     "require": {
-        "php": "^8.2"
+        "php": "^8.2",
+        "laravel/framework": "^12.0"
     },
     "extra": {
         "laravel": {
