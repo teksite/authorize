@@ -40,7 +40,10 @@ class Role extends Model
      */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'auth_permission_role');
+        $userClass = config('auth.providers.users.model',
+            class_exists(\Lareon\CMS\App\Models\User::class) ? \Lareon\CMS\App\Models\User::class : \App\Models\User::class
+        );
+        return $this->belongsToMany($userClass, 'auth_permission_role');
     }
 
 }
