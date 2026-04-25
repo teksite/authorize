@@ -25,14 +25,22 @@ class AuthorizeServiceProvider extends ServiceProvider
 
     public function bootGates(): void
     {
-        if (Schema::hasTable('auth_permissions') && Schema::hasTable('auth_roles')) {
-            if (!cache()->has('allPermissionsGates')) cache()->forever('allPermissionsGates', Permission::query()->select('title', 'id')->get());
-            $permissions = Permission::query()->select('title', 'id')->cursor();//cache()->get('allPermissionsGates');
-            foreach ($permissions as $permission) {
-                Gate::define($permission->title, function ($user) use ($permission) {
-                    return $user->hasPermission($permission->title);
-                });
-            }
+        if ($this->app->runningInConsole()) return;
+
+        if (!Schema::hasTable('auth_permissions')
+            || !Schema::hasTable('auth_roles')
+            || !Schema::hasTable('auth_roles')
+        ) return;
+
+
+        if (!cache()->has('allPermissionsGates')) cache()->forever('allPermissionsGates', Permission::query()->select('title', 'id')->get());
+
+        $permissions = Permission::query()->select('title', 'id')->get();
+        
+        foreach ($permissions as $permission) {
+            Gate::define($permission->title, function ($user) use ($permission) {
+                return $user->hasPermission($permission->title);
+            });
         }
     }
 
@@ -43,6 +51,6 @@ class AuthorizeServiceProvider extends ServiceProvider
     {
         $migrationPath = __DIR__ . '/Migrations';
 
-        if (is_dir($migrationPath))  $this->loadMigrationsFrom($migrationPath);
+        if (is_dir($migrationPath)) $this->loadMigrationsFrom($migrationPath);
     }
 }

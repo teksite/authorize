@@ -10,6 +10,7 @@ Sina Zangiband
 
 ### Contact
 - Alternate Website: [teksite.net](https://teksite.net)
+- laratek.net [laratek.net](https://laratek.net)
 
 ---
 
