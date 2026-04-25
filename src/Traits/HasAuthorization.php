@@ -3,20 +3,27 @@
 namespace Teksite\Authorize\Traits;
 
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Lareon\CMS\App\Models\User;
 use Teksite\Authorize\Models\Permission;
 use Teksite\Authorize\Models\Role;
 
 trait HasAuthorization
 {
-    public function permissions()
+    /**
+     * @return MorphToMany
+     */
+    public function permissions(): MorphToMany
     {
         return $this->morphToMany(Permission::class, 'model', 'auth_permission_models');
     }
 
 
-    public function roles()
+    /**
+     * @return MorphToMany
+     */
+    public function roles(): MorphToMany
     {
         return $this->morphToMany(Role::class, 'model', 'auth_role_models');
     }
@@ -28,11 +35,10 @@ trait HasAuthorization
      */
     public function syncPermissions(array $permissions, bool $detaching = true): void
     {
-        if ($detaching) {
-            $this->permissions()->sync($permissions);
-        } else {
-            $this->permissions()->syncWithoutDetaching($permissions);
-        }
+        $detaching
+            ? $this->permissions()->sync($permissions)
+            : $this->permissions()->syncWithoutDetaching($permissions);
+
     }
 
     /**
@@ -40,54 +46,36 @@ trait HasAuthorization
      *
      * @param Role|Role[]|string|string[] $roles
      * @param bool $detaching
-     * @return void
+     * @return array|null
      */
-    public function assignRole(array|string|Role $roles, bool $detaching = true): void
+    public function assignRole(array|int|string|Role $roles, bool $detaching = true): ?array
     {
-        $roleIds = [];
-        // Ensure roles are an array
-        $roles = is_array($roles) ? $roles : [$roles];
+        $rolesArray = is_array($roles) ? $roles : [$roles];
 
-        foreach ($roles as $role) {
-            if ($role instanceof Role) {
-                $roleIds[] = $role->id;
-            }elseif (is_numeric($role)) {
-                $role = Role::query()->where('id', $role)->first(['id']);
-                if ($role) $roleIds[]= $role->id;
-            }else{
-                $role = Role::query()->where('title', $role)->first(['id']);
-                if ($role) $roleIds[]= $role->id;
-            }
-        }
+        $filteredIds = $this->filterRoleItems($rolesArray);
+
+        if (empty($roleIds)) return null;
 
         // Sync roles with optional detaching
-        $detaching ? $this->roles()->sync($roleIds) : $this->roles()->syncWithoutDetaching($roleIds);
+        return $detaching ? $this->roles()->sync($filteredIds) : $this->roles()->syncWithoutDetaching($filteredIds);
     }
 
     /**
-     * @param string|int|array|Role|Collection $roles
+     * @param string|int|array|Role $roles
      * @param bool $any
      * @return bool
      */
-    public function hasRole(string|int|array|Role|Collection $roles, bool $any = true): bool
+    public function hasRole(string|int|array|Role $roles, bool $any = true): bool
     {
-        // Convert to an array if it's not already
-        $rolesArr = is_array($roles) || $roles instanceof Collection ? $roles : [$roles];
+        $rolesArray = is_array($roles) ? $roles : [$roles];
 
-        // Collect role IDs
-        $roleIds = collect($rolesArr)->map(fn($role) => match (true) {
-            is_string($role) => Role::query()->where('title', $role)->first('id')?->id,
-            is_int($role) => $role,
-            $role instanceof Role => $role->id,
-            default => null
-        })->filter()->all(); // Remove null values
+        $filteredIds = $this->filterRoleItems($rolesArray);
 
-        if (empty($roleIds))  return false;
+        if (empty($filteredIds)) return false;
 
+        $count = $this->roles()->whereIn('id', $filteredIds)->count();
+        return $any ? $count > 0 : $count === count($rolesArray);
 
-        $query = $this->roles()->whereIn('id', $roleIds);
-
-        return $any ? $query->exists() : $query->count() === count($roleIds);
 
     }
 
@@ -98,59 +86,94 @@ trait HasAuthorization
     public function hasPermission(string|int|Permission $permission): bool
     {
         if (is_string($permission)) {
-            $permission = Permission::query()->where('title', $permission)->with('roles', function ($query) {
+            $permissionModel = Permission::query()->where('title', $permission)->with('roles', function ($query) {
                 $query->select(['title', 'id']);
             })->first('id');
         } elseif (is_int($permission)) {
-            $permission = Permission::query()->where('id', $permission)->with('roles', function ($query) {
+            $permissionModel = Permission::query()->where('id', $permission)->with('roles', function ($query) {
                 $query->select(['title', 'id']);
             })->first('id');
+        } else {
+            $permissionModel = $permission;
         }
-        if ($permission->exists === false) return false;
+        if (!$permissionModel) return false;
         return $this->permissions->contains('id', $permission->id) || $this->hasRole($permission->roles);
     }
 
     /**
      * @return mixed
      */
-    public function allPermission()
+    public function allPermission(): mixed
     {
-        return $this->roles->map(function ($role) {
-            return $role->permissions;
-        })->flatten()->merge($this->permissions)->unique('id');
+        $directPermissions = $this->permissions;
+        $rolePermissions = $this->roles->flatMap(fn($role) => $role->permissions);
+
+        return $directPermissions->merge($rolePermissions)->unique('id');
+
     }
 
 
     /**
      * @param bool $min
      * @param bool $max
-     * @param User|null $user
+     * @param Authenticatable|null $user
      * @return array|float|null
      */
-    public static function hierarchy(bool $min = true, bool $max = false ,null|User $user = null): array|float|null
+    public static function hierarchy(bool $min = true, bool $max = false, null|Authenticatable $user = null): array|float|null
     {
-        $user =$user ?? auth()->user(); if (!$user) return null;
+        $user = $user ?? auth()->user();
+        if (!$user) return null;
 
-        $hierarchy['min'] = $user->roles()->min('hierarchy');
-        $hierarchy['max'] = $user->roles()->max('hierarchy');
+        $roles = $user->roles()->get(['hierarchy']);
+
+        $minHierarchy = $roles->min('hierarchy');
+        $maxHierarchy = $roles->max('hierarchy');
+
         if ($min && $max === false) {
-            return $hierarchy['min'];
+            return $minHierarchy;
         } elseif ($min === false && $max) {
-            return $hierarchy['max'];
+            return $maxHierarchy;
         }
-        return $hierarchy;
+        return ['min' => $minHierarchy, 'max' => $maxHierarchy];
     }
 
 
     /**
-     * @param User|null $user
-     * @return \Illuminate\Database\Eloquent\Collection|null
+     * @param Authenticatable|null $user
+     * @return \Illuminate\Database\Eloquent\Collection|Collection|null
      */
-    public static function hierarchyRoles(null|User $user = null): ?\Illuminate\Database\Eloquent\Collection
+    public static function hierarchyRoles(?Authenticatable $user = null): null|\Illuminate\Database\Eloquent\Collection|Collection
     {
-        $user =$user ?? auth()->user(); if (!$user) return null;
-        $hierarchy['min'] = $user->roles()->min('hierarchy');
-        return Role::query()->where('hierarchy','>',$hierarchy)->select(['id' ,'title'])->get();
+        $user = $user ?? auth()->user();
+        if (!$user) return null;
+        $minHierarchy = $user->roles()->min('hierarchy');
+
+        if ($minHierarchy === null) return collect();
+
+        return Role::query()->where('hierarchy', '>', $minHierarchy)->select(['id', 'title'])->get();
+    }
+
+    /**
+     * @param array|Role $rolesArray
+     * @return array
+     */
+    public function filterRoleItems(array|Role $rolesArray): array
+    {
+        $ids = [];
+        $itemsToCheck = [];
+
+        foreach ($rolesArray as $item) {
+            if ($item instanceof Role) $ids[] = $item->id;
+            elseif (is_string($item)) $itemsToCheck['titles'][] = $item;
+            elseif (is_int($item)) $itemsToCheck['ids'][] = $item;
+        }
+        $rolesId = Role::query()
+                       ->whereIn('id', $itemsToCheck['ids'] ?? [])
+                       ->orWhereIn('title', $itemsToCheck['titles'] ?? [])
+                       ->select(['id'])
+                       ->get()->toArray();
+
+        return collect($rolesId)->merge($ids)->flatten()->filter()->unique()->toArray();
     }
 
 

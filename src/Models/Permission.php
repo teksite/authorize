@@ -13,13 +13,15 @@ class Permission extends Model
     protected $fillable = ['title', 'description'];
 
     /**
+     * Suggested rules for creating a new entry
+     *
      * @return string[]
      */
     public static function rules(): array
     {
         return
             [
-                'title' => 'required|string|max:255|unique:auth_permissions,title',
+                'title'       => 'required|string|max:255|unique:auth_permissions,title',
                 'description' => 'nullable|string|max:255',
             ];
     }

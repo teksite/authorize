@@ -36,7 +36,7 @@ class AuthorizeServiceProvider extends ServiceProvider
         if (!cache()->has('allPermissionsGates')) cache()->forever('allPermissionsGates', Permission::query()->select('title', 'id')->get());
 
         $permissions = Permission::query()->select('title', 'id')->get();
-        
+
         foreach ($permissions as $permission) {
             Gate::define($permission->title, function ($user) use ($permission) {
                 return $user->hasPermission($permission->title);
