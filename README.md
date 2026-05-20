@@ -22,8 +22,15 @@ Run the following command in your CLI:
 ```bash
 composer require teksite\authorize
 ```
-### Step 2: Migration
+### Step 2: generate migrations file
 run the migrate command 
+
+```bash
+php artisan authorize:install
+````
+
+### Step 3: Migration
+run the migrate command
 
 ```bash
 php artisan migrate
