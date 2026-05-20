@@ -38,7 +38,7 @@ If you are using Laravel 5.x or earlier, register the service provider in the `c
 ```php
 'providers' => [
     // Other Service Providers
-    Teksite\Authorize\AuthorizeServiceProvider::class,
+    Teksite\Authorize\IconLaravelServiceProvider::class,
 ];
 ```
 
