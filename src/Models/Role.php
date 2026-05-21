@@ -41,7 +41,7 @@ class Role extends Model
     public function users(): BelongsToMany
     {
         $userClass = config('auth.providers.users.model',
-            class_exists(\Lareon\CMS\App\Models\User::class) ? \Lareon\CMS\App\Models\User::class : \App\Models\User::class
+            class_exists(\Lareon\Steward\App\Models\User::class) ? \Lareon\Steward\App\Models\User::class : \App\Models\User::class
         );
         return $this->belongsToMany($userClass, 'auth_permission_role');
     }
