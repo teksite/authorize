@@ -36,7 +36,7 @@ run the migrate command
 php artisan migrate
 ````
 
-### Step 3: Define gates in the AppServiceProvider
+### Step 4: Define gates in the AppServiceProvider
 For laravel 5 or higher version, GatesServiceProvider is discovered automatically, so you don't need to do anything
 
 #### Laravel 5.x and earlier

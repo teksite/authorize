@@ -21,7 +21,7 @@ class AuthorizeServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->bootGates();
-        $this->loadMigrations();
+     //   $this->loadMigrations();
         $this->bootCommands();
     }
 
@@ -51,9 +51,9 @@ class AuthorizeServiceProvider extends ServiceProvider
      */
     private function loadMigrations(): void
     {
-        $migrationPath = __DIR__ . '/Migrations';
-
-        if (is_dir($migrationPath)) $this->loadMigrationsFrom($migrationPath);
+      //  $migrationPath = __DIR__ . '/Migrations';
+      //
+      //  if (is_dir($migrationPath)) $this->loadMigrationsFrom($migrationPath);
     }
 
     private function bootCommands(): void

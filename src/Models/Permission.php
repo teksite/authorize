@@ -5,6 +5,7 @@ namespace Teksite\Authorize\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Validation\Rule;
 
 class Permission extends Model
 {
@@ -17,13 +18,15 @@ class Permission extends Model
      *
      * @return string[]
      */
-    public static function rules(): array
+    public static function rules(string $operation = 'create' , ?int $ignoreId = null): array
     {
-        return
-            [
-                'title'       => 'required|string|max:255|unique:auth_permissions,title',
-                'description' => 'nullable|string|max:255',
-            ];
+
+        return match ($operation) {
+            'create' => ['title' => 'required|string|max:255|unique:auth_permissions,title', 'description' => 'nullable|string|max:255',],
+            'update' => ['title' => ['required','string' ,'max:255' ,Rule::unique('auth_permissions' , 'title')->ignore($ignoreId)], 'description' => 'nullable|string|max:255',],
+            default => [],
+        };
+
     }
 
     /**

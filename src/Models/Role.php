@@ -4,6 +4,7 @@ namespace Teksite\Authorize\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Validation\Rule;
 
 class Role extends Model
 {
@@ -16,15 +17,28 @@ class Role extends Model
      *
      * @return string[]
      */
-    public static function rules(): array
+
+    public static function rules(string $operation = 'create', ?int $ignoreId = null): array
     {
-        return [
-            'title'         => 'required|string|max:255|unique:auth_roles,title',
-            'description'   => 'nullable|string|max:255',
-            'permissions'   => 'array|required',
-            'permissions.*' => 'exists:auth_permissions,id',
-            'hierarchy'     => 'required', 'numeric',
-        ];
+
+        return match ($operation) {
+            'create' => [
+                'title'         => 'required|string|max:255|unique:auth_roles,title',
+                'description'   => 'nullable|string|max:255',
+                'permissions'   => 'array|required',
+                'permissions.*' => 'exists:auth_permissions,id',
+                'hierarchy'     => 'required', 'numeric',
+            ],
+            'update' => [
+                'title'         => ['required', 'string', 'max:255', Rule::unique('auth_roles', 'title')->ignore($ignoreId)],
+                'description'   => 'nullable|string|max:255',
+                'permissions'   => 'array|required',
+                'permissions.*' => 'exists:auth_permissions,id',
+                'hierarchy'     => 'required|numeric',
+            ],
+            default  => [],
+        };
+
     }
 
     /**
