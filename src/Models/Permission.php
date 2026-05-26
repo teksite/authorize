@@ -37,4 +37,17 @@ class Permission extends Model
         return $this->belongsToMany(Role::class, 'auth_permission_role');
     }
 
+
+    /**
+     * @return BelongsToMany
+     */
+    public function users(): BelongsToMany
+    {
+
+        $userClass = config('auth.providers.users.model',
+            class_exists(\Lareon\Steward\App\Models\User::class) ? \Lareon\Steward\App\Models\User::class : \App\Models\User::class
+        );
+        return $this->belongsToMany($userClass, 'auth_permission_models');
+    }
+
 }
