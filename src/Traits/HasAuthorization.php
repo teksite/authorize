@@ -159,11 +159,10 @@ trait HasAuthorization
      */
     public function filterRoleItems(array|Role $rolesArray): array
     {
-        $ids = [];
         $itemsToCheck = [];
 
         foreach ($rolesArray as $item) {
-            if ($item instanceof Role) $ids[] = $item->id;
+            if ($item instanceof Role) $itemsToCheck['ids'][] = $item->id;
             elseif (is_string($item)) $itemsToCheck['titles'][] = $item;
             elseif (is_int($item)) $itemsToCheck['ids'][] = $item;
         }
@@ -173,7 +172,7 @@ trait HasAuthorization
                        ->select(['id'])
                        ->get()->toArray();
 
-        return collect($rolesId)->merge($ids)->flatten()->filter()->unique()->toArray();
+        return collect($rolesId)->filter()->unique()->toArray();
     }
 
 
