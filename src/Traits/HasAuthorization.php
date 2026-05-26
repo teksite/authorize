@@ -97,7 +97,7 @@ trait HasAuthorization
             $permissionModel = $permission;
         }
         if (!$permissionModel) return false;
-        return $this->permissions->contains('id', $permission->id) || $this->hasRole($permission->roles);
+        return $this->permissions->contains('id', $permissionModel->id) || $this->hasRole($permissionModel->roles);
     }
 
     /**
