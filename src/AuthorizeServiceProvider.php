@@ -21,12 +21,14 @@ class AuthorizeServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->bootGates();
-     //   $this->loadMigrations();
         $this->bootCommands();
     }
 
     public function bootGates(): void
     {
+        if(!config('auth.boot_gates', true)){
+            return;
+        }
         if ($this->app->runningInConsole()) return;
 
         if (!Schema::hasTable('auth_permissions')
@@ -35,26 +37,17 @@ class AuthorizeServiceProvider extends ServiceProvider
         ) return;
 
 
-        if (!cache()->has('allPermissionsGates')) cache()->forever('allPermissionsGates', Permission::query()->select('title', 'id')->get());
+        if (!cache()->has('allPermissionsGates')) cache()->forever('allPermissionsGates', Permission::query()->select(['title', 'id'])->pluck('title' ,'id')->toArray());
 
-        $permissions = Permission::query()->select('title', 'id')->get();
+        $permissions = Permission::query()->select(['title', 'id'])->pluck('title' ,'id')->toArray();
 
-        foreach ($permissions as $permission) {
-            Gate::define($permission->title, function ($user) use ($permission) {
-                return $user->hasPermission($permission->title);
+        foreach ($permissions as $id=>$title) {
+            Gate::define($title, function ($user) use ($title) {
+                return $user->hasPermission($title);
             });
         }
     }
 
-    /**
-     * @return void
-     */
-    private function loadMigrations(): void
-    {
-      //  $migrationPath = __DIR__ . '/Migrations';
-      //
-      //  if (is_dir($migrationPath)) $this->loadMigrationsFrom($migrationPath);
-    }
 
     private function bootCommands(): void
     {
