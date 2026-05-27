@@ -9,4 +9,6 @@ return [
 
     'cache_ttl' => 86400,
 
+    'super_admin_role'=>'administrator',
+
 ];

@@ -139,8 +139,9 @@ class AuthorizeServiceProvider extends ServiceProvider
                 return null;
             }
 
+            $superAdmin= config('authorize.super_admin_role' , null);
             // Super admin bypass
-            if ($user->hasRole('administrator') ?? false) {
+            if ($superAdmin && $user->hasRole($superAdmin) ?? false) {
                 return true;
             }
 
@@ -190,12 +191,5 @@ class AuthorizeServiceProvider extends ServiceProvider
         ], 'authorize-migrations');
     }
 
-    /**
-     * Clear the permissions cache (useful for artisan commands).
-     */
-    public static function clearPermissionsCache(): void
-    {
-        Cache::forget(self::PERMISSIONS_CACHE_KEY);
-    }
 
 }
