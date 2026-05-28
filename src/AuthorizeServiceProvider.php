@@ -18,14 +18,9 @@ class AuthorizeServiceProvider extends ServiceProvider
 
     protected const string PERMISSIONS_CACHE_KEY = 'authorize.permissions.gates';
 
-
     public function register(): void
     {
-
-        $this->mergeConfigFrom(
-            __DIR__ . '/../config/authorize.php',
-            'authorize'
-        );
+        $this->registerConfigs();
     }
 
     /**
@@ -37,6 +32,7 @@ class AuthorizeServiceProvider extends ServiceProvider
         $this->bootCommands();
         $this->bootPublishing();
     }
+
 
     public function bootGates(): void
     {
@@ -139,7 +135,7 @@ class AuthorizeServiceProvider extends ServiceProvider
                 return null;
             }
 
-            $superAdmin= config('authorize.super_admin_role' , null);
+            $superAdmin = config('authorize.super_admin_role', null);
             // Super admin bypass
             if ($superAdmin && $user->hasRole($superAdmin) ?? false) {
                 return true;
@@ -175,6 +171,13 @@ class AuthorizeServiceProvider extends ServiceProvider
                 AuthInstall::class,
             ]);
         }
+    }
+
+
+    protected function registerConfigs(): void
+    {
+        $configPath = config_path('authorize.php');
+        $this->mergeConfigFrom(file_exists($configPath) ? $configPath : __DIR__ . '/config/authorize.php', 'authorize');
     }
 
     /**
