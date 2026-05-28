@@ -44,11 +44,9 @@ class AuthorizeServiceProvider extends ServiceProvider
             return;
         }
 
-
         if (!$this->validateDatabaseTables()) {
             return;
         }
-
 
         $permissions = $this->loadPermissions();
 
@@ -66,7 +64,7 @@ class AuthorizeServiceProvider extends ServiceProvider
      */
     protected function validateDatabaseTables(): bool
     {
-        $requiredTables = ['auth_permissions', 'auth_roles', 'auth_role_permissions'];
+        $requiredTables = ['auth_permissions', 'auth_roles', 'auth_permission_role'];
 
         foreach ($requiredTables as $table) {
             if (!Schema::hasTable($table)) {
@@ -74,7 +72,6 @@ class AuthorizeServiceProvider extends ServiceProvider
                 return false;
             }
         }
-
         return true;
     }
 
