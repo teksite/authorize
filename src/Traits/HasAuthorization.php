@@ -169,7 +169,7 @@ trait HasAuthorization
         foreach ($permissionsArray as $item) {
             match (true) {
                 $item instanceof Permission => $ids[] = $item->id,
-                is_int($item)               => $ids[] = $item,
+                is_numeric($item)               => $ids[] = $item,
                 is_string($item)            => $titles[] = $item,
                 default                     => null
             };
@@ -203,7 +203,7 @@ trait HasAuthorization
         foreach ($rolesArray as $item) {
             match (true) {
                 $item instanceof Role => $ids[] = $item->id,
-                is_int($item)         => $ids[] = $item,
+                is_numeric($item)         => $ids[] = $item,
                 is_string($item)      => $titles[] = $item,
                 default               => null
             };
@@ -445,7 +445,7 @@ trait HasAuthorization
 
         $roleModel = match (true) {
             $role instanceof Role => $role,
-            is_int($role) => Role::find($role),
+            is_numeric($role) => Role::find($role),
             default => Role::where('title', $role)->first(),
         };;
 
