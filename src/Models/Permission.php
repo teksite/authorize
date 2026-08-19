@@ -2,16 +2,23 @@
 
 namespace Teksite\Authorize\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
+use Teksite\Authorize\factories\PermissionFactory;
 
+#[UseFactory(PermissionFactory::class)]
+#[Fillable(['title', 'description'])]
 class Permission extends Model
 {
-    protected $table = 'auth_permissions';
+    /** @use HasFactory<PermissionFactory> */
+    use HasFactory;
 
-    protected $fillable = ['title', 'description'];
+    protected $table = 'auth_permissions';
 
     /**
      * Suggested rules for creating a new entry

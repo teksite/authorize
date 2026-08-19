@@ -2,15 +2,23 @@
 
 namespace Teksite\Authorize\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Validation\Rule;
+use Teksite\Authorize\factories\RoleFactory;
 
+
+#[UseFactory(RoleFactory::class)]
+#[Fillable(['title', 'description' ,'hierarchy'])]
 class Role extends Model
 {
-    protected $table = 'auth_roles';
+    /** @use HasFactory<RoleFactory> */
+    use HasFactory;
 
-    protected $fillable = ['title', 'description', 'hierarchy'];
+    protected $table = 'auth_roles';
 
     /**
      * Suggested rules for creating a new entry
