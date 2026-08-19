@@ -19,8 +19,9 @@ class RoleFactory extends Factory
     public function definition(): array
     {
         return [
-            'title'=> implode('-', $this->faker->words(2)),
-            'description' => fake()->unique()->sentence(5),
+            'title' => implode('-', $this->faker->words(2)),
+            'description' => $this->faker->sentence(5),
+            'hierarchy' => $this->faker->numberBetween(10, 90),
         ];
     }
 

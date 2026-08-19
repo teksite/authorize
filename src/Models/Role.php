@@ -35,7 +35,7 @@ class Role extends Model
                 'description'   => 'nullable|string|max:255',
                 'permissions'   => 'array|required',
                 'permissions.*' => 'exists:auth_permissions,id',
-                'hierarchy'     => 'required', 'numeric',
+                'hierarchy'     => 'required|numeric',
             ],
             'update' => [
                 'title'         => ['required', 'string', 'max:255', Rule::unique('auth_roles', 'title')->ignore($ignoreId)],

@@ -19,8 +19,8 @@ class PermissionFactory extends Factory
     public function definition(): array
     {
         return [
-            'title'=> implode('.', $this->faker->words(2)),
-            'description' => fake()->unique()->sentence(5),
+            'title'       =>  $this->faker->unique()->word() . '.' . $this->faker->randomElement(['read', 'create', 'update', 'delete']),
+            'description' => $this->faker->sentence(),
         ];
     }
 
