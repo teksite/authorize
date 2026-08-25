@@ -42,10 +42,7 @@ trait HasAuthorization
      */
     public function syncPermissions(array|string|int|Permission $permissions, bool $detaching = true): array
     {
-
         $filteredIds = $this->resolvePermissionIds($permissions);
-
-        if (empty($filteredIds)) return [];
 
         $result = $detaching
             ? $this->permissions()->sync($filteredIds)
@@ -56,6 +53,7 @@ trait HasAuthorization
         return $result;
     }
 
+
     /**
      * Sync roles
      */
@@ -63,8 +61,6 @@ trait HasAuthorization
     {
 
         $filteredIds = $this->resolveRoleIds($roles);
-
-        if (empty($filteredIds)) return [];
 
         $result = $detaching
             ? $this->roles()->sync($filteredIds)
@@ -180,7 +176,7 @@ trait HasAuthorization
 
         foreach ($rolesArray as $item) {
 
-            if ($rolesArray instanceof Role) {
+            if ($item instanceof Role) {
                 $ids[] = $item->getKey();
                 continue;
             }
@@ -227,9 +223,10 @@ trait HasAuthorization
         $permissions = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
             $this->loadMissing('permissions', 'roles.permissions');
 
-            $directPermissions = ['direct_permissions' => $this->getDirectPermissions()];
-            $rolePermissions = $this->getPermissionsByRoles();
-            return collect($rolePermissions)->merge($directPermissions)->toArray();
+            return $this->permissions->merge($this->roles->flatMap(fn (Role $role) => $role->permissions))
+                ->unique('id')
+                ->pluck('title', 'id')
+                ->toArray();
         });
 
         return $onlyIds
@@ -270,14 +267,11 @@ trait HasAuthorization
     public function getDirectRoles(bool $onlyIds = false): array
     {
 
-        $roles = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
+        $roles = $this->rememberAuthorizationCache($this->getRoleCacheKey(), function (): array {
             return $this->roles->pluck('title', 'id')->toArray();
         });
 
-
-        return $onlyIds
-            ? array_keys($roles)
-            : $roles;
+        return $onlyIds ? array_keys($roles) : $roles;
     }
 
     /**

@@ -36,14 +36,14 @@ class Role extends Model
                 'description'   => 'nullable|string|max:255',
                 'permissions'   => 'array|required',
                 'permissions.*' => 'exists:auth_permissions,id',
-                'hierarchy'     => 'required|numeric',
+                'hierarchy'     => 'required|integer',
             ],
             'update' => [
                 'title'         => ['required', 'string', 'max:255', Rule::unique('auth_roles', 'title')->ignore($ignoreId)],
                 'description'   => 'nullable|string|max:255',
                 'permissions'   => 'array|required',
                 'permissions.*' => 'exists:auth_permissions,id',
-                'hierarchy'     => 'required|numeric',
+                'hierarchy'     => 'required|integer',
             ],
             default  => [],
         };
@@ -56,12 +56,6 @@ class Role extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'auth_permission_role');
-    }
-
-
-    public function models(): MorphToMany
-    {
-        return $this->morphedByMany(Model::class, 'model', 'auth_role_models');
     }
 
     public function users(): MorphToMany

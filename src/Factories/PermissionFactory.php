@@ -1,6 +1,6 @@
 <?php
 
-namespace Teksite\Authorize\factories;
+namespace Teksite\Authorize\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Teksite\Authorize\Models\Permission;
