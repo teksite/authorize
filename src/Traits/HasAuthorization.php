@@ -21,7 +21,6 @@ trait HasAuthorization
      */
     public string $cachePrefix = 'authorize';
 
-
     /**
      * @return MorphToMany
      */
@@ -37,7 +36,6 @@ trait HasAuthorization
     {
         return $this->morphToMany(Role::class, 'model', 'auth_role_models');
     }
-
 
     /**
      * Sync direct permissions
@@ -58,7 +56,6 @@ trait HasAuthorization
         return $result;
     }
 
-
     /**
      * Sync roles
      */
@@ -67,9 +64,8 @@ trait HasAuthorization
 
         $filteredIds = $this->resolveRoleIds($roles);
 
-        if (empty($filteredIds)) {
-            return [];
-        }
+        if (empty($filteredIds)) return [];
+
         $result = $detaching
             ? $this->roles()->sync($filteredIds)
             : $this->roles()->syncWithoutDetaching($filteredIds);
@@ -81,61 +77,42 @@ trait HasAuthorization
     }
 
     /**
-     * does the model have role(s)
-     *
-     * @param string|int|array|Role $roles
-     * @param bool $any
-     * @return bool
+     * Determine whether the model has one or more roles.
      */
     public function hasRole(string|int|array|Role $roles, bool $any = true): bool
     {
-        $rolesArray = is_array($roles) ? $roles : [$roles];
+        $requestedIds = $this->resolveRoleIds($roles);
 
-        if (empty($rolesArray)) {
-            return false;
-        }
-        $userRoles = $this->getDirectRoles(true);
-        $filteredIds = $this->resolveRoleIds($rolesArray);
+        if (empty($requestedIds)) return false;
 
-        $intersection = array_intersect($userRoles, $filteredIds);
-        $count = count($intersection);
+        $modelRoleIds = $this->getDirectRoles(true);
 
-        if ($any) {
-            return $count > 0;
-        }
+        $matched = count(array_intersect($modelRoleIds, $requestedIds));
 
-        return $count === count($filteredIds);
+        return $any
+            ? $matched > 0
+            : $matched === count($requestedIds);
     }
 
     /**
      * does the model have permission(s)
-     *
-     * @param string|int|array|Permission $permissions
-     * @param bool $any
-     * @return bool
      */
     public function hasPermission(string|int|array|Permission $permissions, bool $any = true): bool
     {
-        $this->getAllPermissions();
+        $requestedIds = $this->resolvePermissionIds($permissions);
 
-        $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
-
-        if (empty($permissionsArray)) return false;
+        if (empty($requestedIds)) return false;
 
         if ($this->isSuperAdmin()) return true;
 
+        $modelPermissionIds = $this->getAllPermissions(true);
 
-        $userPermissions = $this->getAllPermissions(true);
-        $filteredIds = $this->resolvePermissionIds($permissionsArray);
+        $matched = count(array_intersect($modelPermissionIds, $requestedIds));
 
-        $intersection = array_intersect($userPermissions, $filteredIds);
-        $count = count($intersection);
-
-        if ($any) return $count > 0;
-
-        return $count == ($filteredIds);
+        return $any
+            ? $matched > 0
+            : $matched === count($requestedIds);
     }
-
 
     /**
      * Filter and resolve permission items to IDs
@@ -240,34 +217,29 @@ trait HasAuthorization
         return $query->pluck('id')->toArray();
     }
 
-
     /**
-     *  get all permissions directly or by roles
+     * Get all permissions of the model.
      *
-     * @param bool $ids : set it true to return oly ids of permissions else return id=>title
-     * @return array
+     * Includes direct permissions and role permissions.
      */
-    public function getAllPermissions(bool $ids = true): array
+    public function getAllPermissions(bool $onlyIds = true): array
     {
-        $groupedPermissions = Cache::remember($this->getPermissionCacheKey(), $this->getCacheDuration(), function () {
+        $permissions = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
+            $this->loadMissing('permissions', 'roles.permissions');
+
             $directPermissions = ['direct_permissions' => $this->getDirectPermissions()];
             $rolePermissions = $this->getPermissionsByRoles();
             return collect($rolePermissions)->merge($directPermissions)->toArray();
         });
 
-        $permission = collect($groupedPermissions)
-            ->reduce(fn($carry, $item) => $carry->union($item), collect())
-            ->all();
-
-        return $ids ? array_keys($permission) : $permission;
+        return $onlyIds
+            ? array_keys($permissions)
+            : $permissions;
 
     }
 
-
     /**
      *  get permission of the model directly without considering role relation
-     *
-     * @return array
      */
     public function getDirectPermissions(): array
     {
@@ -281,114 +253,45 @@ trait HasAuthorization
      */
     public function getPermissionsByRoles(): array
     {
+        $this->loadMissing('roles.permissions');
+
         $permissions = [];
 
-        $this->roles->each(function ($role) use (&$permissions) {
+        foreach ($this->roles as $role) {
             $permissions[$role->title] = $role->permissions->pluck('title', 'id')->toArray();
-        });
+        }
 
         return $permissions;
     }
 
-
     /**
      * Get direct roles
-     *
-     * @param bool $ids : true => return only ids, false key value of id=>title
-     * @return array
      */
-    public function getDirectRoles(bool $ids = false): array
+    public function getDirectRoles(bool $onlyIds = false): array
     {
 
-        $roles = Cache::remember($this->getRoleCacheKey(), $this->getCacheDuration(), function () {
+        $roles = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
             return $this->roles->pluck('title', 'id')->toArray();
         });
 
-        return $ids ? array_keys($roles) : $roles;
-    }
 
-
-    /**
-     * Get cache key for roles
-     */
-    protected function getRoleCacheKey(): string
-    {
-        return $this->cachePrefix . ':roles:' . $this->getKey();
-    }
-
-
-    /**
-     * Get cache TTL
-     */
-    protected function getCacheDuration(): string
-    {
-        return config('authorize.cache_ttl', $this->cacheDuration) ?? 86400;
-
-    }
-
-
-    /**
-     * Get cache key for roles
-     */
-    protected function getHierarchyCacheKey(): string
-    {
-        return $this->cachePrefix . ':hierarchy:' . $this->getKey();
-    }
-
-
-    /**
-     * Get cache key for permissions
-     */
-    protected function getPermissionCacheKey(): string
-    {
-        return $this->cachePrefix . ':permissions:' . $this->getKey();
+        return $onlyIds
+            ? array_keys($roles)
+            : $roles;
     }
 
     /**
-     * Get cache key for all permissions
-     */
-    protected function getAllPermissionsCacheKey(): string
-    {
-        return $this->cachePrefix . ':all_permissions:' . $this->getKey();
-    }
-
-    protected static function bootHasAuthorization(): void
-    {
-        static::saved(function ($model) {
-            $model->clearAuthorizationCache();
-        });
-    }
-
-    /**
-     * Clear all authorization caches for this model
-     */
-    public function clearAuthorizationCache(): void
-    {
-        Cache::forget($this->getPermissionCacheKey());
-        Cache::forget($this->getRoleCacheKey());
-        Cache::forget($this->getHierarchyCacheKey());
-    }
-
-    /**
-     * check if the model is super admin
-     *
-     * @return bool
+     * Determine whether the model is a super administrator.
      */
     public function isSuperAdmin(): bool
     {
-        $superAdmin = config('authorize.super_admin_role', null);
-        if ($superAdmin && ($this->hasRole($superAdmin) ?? false)) {
-            return true;
-        }
-        return false;
+        $role = config('authorize.super_admin_role');
+
+        return ($role !== null) && ($this->hasRole($role));
     }
 
     /**
      * get hierarchy of the model
-     *
-     * @param bool $min
-     * @param bool $max
-     * @return array|float|null
      */
     public function hierarchy(bool $min = true, bool $max = false): array|float|null
     {
@@ -418,62 +321,58 @@ trait HasAuthorization
     }
 
     /**
-     * Check if model can access another model by hierarchy
-     *
-     * @param Model $model
-     * @return bool|null if return null mean the role is not found
+     * Check hierarchy access against another authorization model.
      */
     public function canAccessModelByHierarchy(Model $model): bool|null
     {
         if (!method_exists($model, 'hierarchy')) {
-            throw new InvalidArgumentException('Hierarchy method does not exist in model: ' . get_class($model));
+            throw new InvalidArgumentException('Model must use HasAuthorization: ' . $model::class);
         }
 
+        $myHierarchy = $this->hierarchy(true, false);
 
-        $min = $this->hierarchy(true, false);
+        if ($myHierarchy === null) return false;
 
-        if ($min === null) {
-            return false;
-        }
+        $targetHierarchy = $model->hierarchy(true, false);
 
-        $minModel = $model->hierarchy(true, false);
+        if ($targetHierarchy === null) return null;
 
-        if ($minModel === null) {
-            return null;
-        }
-
-        return $min < $minModel;
+        return $myHierarchy < $targetHierarchy;
 
     }
 
 
     /**
-     * Check if model can access role by hierarchy - optimized
-     *
-     * @param Role|int|string $role
-     * @return bool|null if return null mean the role is not found
+     * Check hierarchy access against a role.
      */
     public function canAccessRoleByHierarchy(Role|int|string $role): bool|null
     {
-        $min = $this->hierarchy(true, false);
+        $myHierarchy = $this->hierarchy();
 
-        if ($min === null) {
-            return false;
-        }
+        if ($myHierarchy === null) return false;
 
         $roleModel = match (true) {
             $role instanceof Role => $role,
-            is_numeric($role)     => Role::find($role),
-            default               => Role::where('title', $role)->first(),
-        };;
+            is_int($role)         => Role::find($role),
+            is_numeric($role)     => Role::find((int)$role),
+            default               => Role::query()->where('title', $role)->first(),
+        };
 
-        if (!$roleModel) {
-            return null;
-        }
+        if (!$roleModel) return null;
 
-        return $min < $roleModel->hierarchy;
+        return $myHierarchy < $roleModel->hierarchy;
     }
 
+
+    /**
+     * Clear all authorization caches for this model
+     */
+    public function clearAuthorizationCache(): void
+    {
+        Cache::forget($this->getPermissionCacheKey());
+        Cache::forget($this->getRoleCacheKey());
+        Cache::forget($this->getHierarchyCacheKey());
+    }
 
     /**
      * Warm up cache for this model
@@ -484,4 +383,78 @@ trait HasAuthorization
         $this->getDirectRoles();
         $this->hierarchy();
     }
+
+    /**
+     * Get cache duration.
+     */
+    protected function getCacheDuration(): int
+    {
+        return (int)config('authorize.cache_ttl', 3600);
+    }
+
+
+    /**
+     * Clear cache whenever the authorization model is saved.
+     */
+    protected static function bootHasAuthorization(): void
+    {
+        static::saved(
+            fn(Model $model) => $model->clearAuthorizationCache()
+        );
+    }
+
+
+    /**
+     * Get cache key for roles
+     */
+    protected function getRoleCacheKey(): string
+    {
+        return sprintf('%s:roles:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+    }
+
+
+    /**
+     * Get hierarchy cache key.
+     */
+    protected function getHierarchyCacheKey(): string
+    {
+        return sprintf('%s:hierarchy:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+    }
+
+
+    /**
+     * Get permission cache key.
+     */
+    protected function getPermissionCacheKey(): string
+    {
+        return sprintf('%s:permissions:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+    }
+
+    /**
+     * Get cache key for all permissions
+     */
+    protected function getAllPermissionsCacheKey(): string
+    {
+        return $this->cachePrefix . ':all_permissions:' . $this->getKey();
+    }
+
+
+    /**
+     * Get unique cache identity for this authorization model.
+     *
+     * Important for User #1 and Admin #1 having the same primary key.
+     */
+    protected function getAuthorizationCacheIdentifier(): string
+    {
+        return $this->getMorphClass() . ':' . $this->getKey();
+    }
+
+    protected function rememberAuthorizationCache(string $key, \Closure $callback): mixed
+    {
+
+        if (!config('authorize.cache_enabled', true)) return $callback();
+
+        return Cache::remember($key, $this->getCacheDuration(), $callback);
+    }
+
 }
