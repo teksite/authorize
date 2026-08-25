@@ -45,9 +45,14 @@ class Permission extends Model
     }
 
 
-    public function models(): MorphToMany
+    /**
+     * @return BelongsToMany
+     */
+    public function users(): BelongsToMany
     {
-        return $this->morphedByMany(Model::class, 'model', 'auth_permission_models');
+
+        $userClass = config('auth.providers.users.model');
+        return $this->belongsToMany($userClass, 'auth_permission_models');
     }
 
 }

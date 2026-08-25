@@ -14,33 +14,32 @@ use Teksite\Authorize\Models\Permission;
 class GateServiceProvider extends ServiceProvider
 {
 
-    protected const int CACHE_TTL = 86400;
+    public const int CACHE_TTL = 86400;
 
-    protected const string PERMISSIONS_CACHE_KEY = 'authorize.permissions.gates';
+    public const string PERMISSIONS_CACHE_KEY = 'authorize:permissions:gates';
 
     /**
      * Boot the application events.
      */
     public function boot(): void
     {
-        $this->bootGates();
-    }
 
-
-    public function bootGates(): void
-    {
-        if (!config('authorize.boot_gates', true)) return;
-
-        if ($this->app->runningInConsole() && !config('authorize.boot_gates_in_console', false)) return;
-
-        if (!$this->validateDatabaseTables())  return;
-
+        if (!$this->shouldBootGates()) return;
 
         $permissions = $this->loadPermissions();
 
-        if (empty($permissions)) return;
+        if ($permissions === []) return;
 
         $this->registerGates($permissions);
+    }
+
+    protected function shouldBootGates(): bool
+    {
+        if (!config('authorize.boot_gates', true)) return false;
+
+        if ($this->app->runningInConsole() && !config('authorize.boot_gates_in_console', false)) return false;
+
+        return $this->validateDatabaseTables();
     }
 
 
@@ -49,7 +48,7 @@ class GateServiceProvider extends ServiceProvider
      */
     protected function validateDatabaseTables(): bool
     {
-        $requiredTables = ['auth_permissions', 'auth_roles', 'auth_permission_role'];
+        $requiredTables = ['auth_permissions', 'auth_permission_models', 'auth_roles', 'auth_permission_role', 'auth_role_models'];
 
         foreach ($requiredTables as $table) {
             if (!Schema::hasTable($table)) {
@@ -66,14 +65,17 @@ class GateServiceProvider extends ServiceProvider
     protected function loadPermissions(): array
     {
         try {
-            if (config('authorize.cache_enabled', true)) {
-                return Cache::remember(
-                    self::PERMISSIONS_CACHE_KEY,
-                    config('authorize.cache_ttl', self::CACHE_TTL),
-                    fn() => $this->fetchPermissionsFromDatabase()
-                );
+
+            if (!config('authorize.cache_enabled', true)) {
+                return $this->fetchPermissionsFromDatabase();
             }
-            return $this->fetchPermissionsFromDatabase();
+
+            return Cache::remember(
+                self::PERMISSIONS_CACHE_KEY,
+                config('authorize.cache_ttl', self::CACHE_TTL),
+                fn() => $this->fetchPermissionsFromDatabase()
+            );
+
         } catch (\Exception $e) {
             Log::error('Authorize: Failed to load permissions', [
                 'error' => $e->getMessage(),
@@ -90,8 +92,7 @@ class GateServiceProvider extends ServiceProvider
     protected function fetchPermissionsFromDatabase(): array
     {
         try {
-            return Permission::query()
-                             ->select(['title'])
+            return Permission::query()->select(['title'])
                              ->pluck('title')
                              ->filter()
                              ->values()
@@ -109,35 +110,43 @@ class GateServiceProvider extends ServiceProvider
      */
     protected function registerGates(array $permissions): void
     {
-        Gate::before(function ($user, $ability) use ($permissions) {
-            if (!in_array($ability, $permissions, true)) {
-                return null;
-            }
+        $permissionMap = array_fill_keys($permissions, true);
 
-            $superAdmin = config('authorize.super_admin_role', null);
-            if ($superAdmin && ($user->hasRole($superAdmin) ?? false)) {
-                return true;
-            }
+        Gate::before(function ($subject, string $ability) use ($permissionMap) {
+
+            if (!isset($permissionMap[$ability])) return null;
+
+            $superAdminRole = config('authorize.super_admin_role');
+
+            if ($superAdminRole && method_exists($subject, 'hasRole') && $subject->hasRole($superAdminRole)) return true;
 
             return null;
         });
 
-        // Register individual gates for precise control
         foreach ($permissions as $permission) {
-            Gate::define($permission, function ($user) use ($permission) {
+            Gate::define($permission, function ($subject) use ($permission): bool {
                 try {
-                    return $user->hasPermission($permission);
-                } catch (\Exception $e) {
-                    Log::error('Authorize: Gate check failed', [
-                        'permission' => $permission,
-                        'user_id'    => $user->id ?? null,
-                        'error'      => $e->getMessage(),
-                    ]);
+                    if (!method_exists($subject, 'hasPermission')) return false;
+
+                    return $subject->hasPermission($permission);
+                } catch (\Throwable $e) {
+                    Log::error('Authorize: Gate check failed.',
+                        [
+                            'permission' => $permission,
+                            'subject'    => $subject::class,
+                            'subject_id' => method_exists(
+                                $subject,
+                                'getAuthIdentifier'
+                            )
+                                ? $subject->getAuthIdentifier()
+                                : null,
+                            'error'      => $e->getMessage(),
+                        ]
+                    );
                     return false;
                 }
             });
         }
     }
-
 
 }
