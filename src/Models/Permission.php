@@ -45,16 +45,9 @@ class Permission extends Model
     }
 
 
-    /**
-     * @return BelongsToMany
-     */
-    public function users(): BelongsToMany
+    public function models(): MorphToMany
     {
-
-        $userClass = config('auth.providers.users.model',
-            class_exists(\Lareon\Steward\App\Models\User::class) ? \Lareon\Steward\App\Models\User::class : \App\Models\User::class
-        );
-        return $this->belongsToMany($userClass, 'auth_permission_models');
+        return $this->morphedByMany(Model::class, 'model', 'auth_permission_models');
     }
 
 }

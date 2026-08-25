@@ -134,7 +134,7 @@ trait HasAuthorization
 
         if (empty($permissionsArray)) return false;
 
-        if ($this->isSuperAdmin())  return true;
+        if ($this->isSuperAdmin()) return true;
 
 
         $userPermissions = $this->getAllPermissions(true);
@@ -143,7 +143,7 @@ trait HasAuthorization
         $intersection = array_intersect($userPermissions, $filteredIds);
         $count = count($intersection);
 
-        if ($any)  return $count > 0;
+        if ($any) return $count > 0;
 
         return $count == ($filteredIds);
     }
@@ -166,7 +166,7 @@ trait HasAuthorization
         foreach ($permissionsArray as $item) {
             match (true) {
                 $item instanceof Permission => $ids[] = $item->id,
-                is_numeric($item)               => $ids[] = $item,
+                is_numeric($item)           => $ids[] = $item,
                 is_string($item)            => $titles[] = $item,
                 default                     => null
             };
@@ -200,7 +200,7 @@ trait HasAuthorization
         foreach ($rolesArray as $item) {
             match (true) {
                 $item instanceof Role => $ids[] = $item->id,
-                is_numeric($item)         => $ids[] = $item,
+                is_numeric($item)     => $ids[] = $item,
                 is_string($item)      => $titles[] = $item,
                 default               => null
             };
@@ -293,7 +293,6 @@ trait HasAuthorization
     {
         return $this->cachePrefix . ':roles:' . $this->getKey();
     }
-
 
 
     /**
@@ -442,8 +441,8 @@ trait HasAuthorization
 
         $roleModel = match (true) {
             $role instanceof Role => $role,
-            is_numeric($role) => Role::find($role),
-            default => Role::where('title', $role)->first(),
+            is_numeric($role)     => Role::find($role),
+            default               => Role::where('title', $role)->first(),
         };;
 
         if (!$roleModel) {

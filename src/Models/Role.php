@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
 use Teksite\Authorize\factories\RoleFactory;
 
@@ -57,15 +58,10 @@ class Role extends Model
         return $this->belongsToMany(Permission::class, 'auth_permission_role');
     }
 
-    /**
-     * @return BelongsToMany
-     */
-    public function users(): BelongsToMany
+
+    public function models(): MorphToMany
     {
-        $userClass = config('auth.providers.users.model',
-            class_exists(\Lareon\Steward\App\Models\User::class) ? \Lareon\Steward\App\Models\User::class : \App\Models\User::class
-        );
-        return $this->belongsToMany($userClass, 'auth_role_models');
+        return $this->morphedByMany(Model::class, 'model', 'auth_role_models');
     }
 
 }
