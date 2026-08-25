@@ -27,13 +27,11 @@ class Permission extends Model
      */
     public static function rules(string $operation = 'create' , ?int $ignoreId = null): array
     {
-
         return match ($operation) {
             'create' => ['title' => 'required|string|max:255|unique:auth_permissions,title', 'description' => 'nullable|string|max:255',],
             'update' => ['title' => ['required','string' ,'max:255' ,Rule::unique('auth_permissions' , 'title')->ignore($ignoreId)], 'description' => 'nullable|string|max:255',],
             default => [],
         };
-
     }
 
     /**
@@ -45,14 +43,11 @@ class Permission extends Model
     }
 
 
-    /**
-     * @return BelongsToMany
-     */
-    public function users(): BelongsToMany
+    public function users(): MorphToMany
     {
-
         $userClass = config('auth.providers.users.model');
-        return $this->belongsToMany($userClass, 'auth_permission_models');
+
+        return $this->morphedByMany($userClass, 'model', 'auth_permission_models');
     }
 
 }

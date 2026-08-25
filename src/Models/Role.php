@@ -64,15 +64,11 @@ class Role extends Model
         return $this->morphedByMany(Model::class, 'model', 'auth_role_models');
     }
 
-
-    /**
-     * @return BelongsToMany
-     */
-    public function users(): BelongsToMany
+    public function users(): MorphToMany
     {
         $userClass = config('auth.providers.users.model');
 
-        return $this->belongsToMany($userClass, 'auth_role_models');
+        return $this->morphedByMany($userClass, 'model', 'auth_role_models');
     }
 
 

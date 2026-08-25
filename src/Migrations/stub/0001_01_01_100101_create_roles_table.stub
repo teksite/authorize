@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('title')->unique();
             $table->string('description')->nullable();
-            $table->float('hierarchy', 2)->default(15);
+            $table->unsignedInteger('hierarchy')->default(15);
             $table->timestamps();
         });
 
