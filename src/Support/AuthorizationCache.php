@@ -73,7 +73,7 @@ class AuthorizationCache
           });
     }
 
-    public static function forgetMorphModel(string     $type, int|string $id): void
+    public static function forgetMorphModel(string  $type, int|string $id): void
     {
         $model = new $type;
 
