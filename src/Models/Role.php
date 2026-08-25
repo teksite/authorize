@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
-use Teksite\Authorize\factories\RoleFactory;
+use Teksite\Authorize\Factories\RoleFactory;
 use Teksite\Authorize\Support\AuthorizationCache;
 
 
