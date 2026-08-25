@@ -45,7 +45,7 @@ trait HasAuthorization
     public function syncPermissions(array|string|int|Permission $permissions, bool $detaching = true): array
     {
 
-        $filteredIds = $this->filterPermissionsItems($permissions);
+        $filteredIds = $this->resolvePermissionIds($permissions);
 
         if (empty($filteredIds)) return [];
 
@@ -61,16 +61,11 @@ trait HasAuthorization
 
     /**
      * Sync roles
-     *
-     * @param array|int|string|Role $roles
-     * @param bool $detaching
-     * @return array|null
      */
     public function assignRole(array|int|string|Role $roles, bool $detaching = true): ?array
     {
-        $rolesArray = is_array($roles) ? $roles : [$roles];
 
-        $filteredIds = $this->filterRolesItems($rolesArray);
+        $filteredIds = $this->resolveRoleIds($roles);
 
         if (empty($filteredIds)) {
             return [];
@@ -100,7 +95,7 @@ trait HasAuthorization
             return false;
         }
         $userRoles = $this->getDirectRoles(true);
-        $filteredIds = $this->filterRolesItems($rolesArray);
+        $filteredIds = $this->resolveRoleIds($rolesArray);
 
         $intersection = array_intersect($userRoles, $filteredIds);
         $count = count($intersection);
@@ -131,7 +126,7 @@ trait HasAuthorization
 
 
         $userPermissions = $this->getAllPermissions(true);
-        $filteredIds = $this->filterPermissionsItems($permissionsArray);
+        $filteredIds = $this->resolvePermissionIds($permissionsArray);
 
         $intersection = array_intersect($userPermissions, $filteredIds);
         $count = count($intersection);
@@ -145,7 +140,7 @@ trait HasAuthorization
     /**
      * Filter and resolve permission items to IDs
      */
-    protected function filterPermissionsItems(array|string|int|Permission $permissions): array
+    protected function resolvePermissionIds(array|string|int|Permission $permissions): array
     {
         $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
 
@@ -195,12 +190,11 @@ trait HasAuthorization
 
     /**
      * Filter and resolve roles items to IDs
-     *
-     * @param array $rolesArray
-     * @return array
      */
-    protected function filterRolesItems(array $rolesArray): array
+    protected function resolveRoleIds(array|int|string|Role $roles): array
     {
+
+        $rolesArray = is_array($roles) ? $roles : [$roles];
 
         if (empty($rolesArray)) return [];
 
@@ -208,24 +202,42 @@ trait HasAuthorization
         $titles = [];
 
         foreach ($rolesArray as $item) {
-            match (true) {
-                $item instanceof Role => $ids[] = $item->id,
-                is_numeric($item)     => $ids[] = $item,
-                is_string($item)      => $titles[] = $item,
-                default               => null
-            };
+
+            if ($rolesArray instanceof Role) {
+                $ids[] = $item->getKey();
+                continue;
+            }
+
+            if (is_int($item)) {
+                $ids[] = $item;
+                continue;
+            }
+
+            if (is_string($item)) {
+                if (is_numeric($item)) $ids[] = (int)$item;
+                else   $titles[] = $item;
+            }
         }
 
-        if (!empty($titles)) {
-            $roleIdsFromTitles = Role::query()
-                                     ->whereIn('id', $ids)
-                                     ->orWhereIn('title', $titles)
-                                     ->pluck('id')
-                                     ->toArray();
-            $ids = array_merge($ids, $roleIdsFromTitles);
+
+        $ids = array_values(array_unique($ids));
+        $titles = array_values(array_unique($titles));
+
+        if (empty($ids) && empty($titles)) return [];
+
+        $query = Role::query();
+
+        if ($ids !== [] && $titles !== []) {
+            $query->where(function ($query) use ($ids, $titles) {
+                $query->whereIn('id', $ids)->orWhereIn('title', $titles);
+            });
+        } elseif ($ids !== []) {
+            $query->whereIn('id', $ids);
+        } else {
+            $query->whereIn('title', $titles);
         }
 
-        return array_values(array_unique(array_filter($ids)));
+        return $query->pluck('id')->toArray();
     }
 
 
