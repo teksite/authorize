@@ -14,12 +14,12 @@ trait HasAuthorization
     /**
      * Cache duration in seconds (default: 1 hour)
      */
-    protected int $cacheDuration = 3600;
+    public int $cacheDuration = 3600;
 
     /**
      * Cache prefix for permissions
      */
-    protected string $cachePrefix = 'authorize';
+    public string $cachePrefix = 'authorize';
 
 
     /**
@@ -40,21 +40,14 @@ trait HasAuthorization
 
 
     /**
-     * Sync permissions
-     *
-     * @param array|string|int|Permission $permissions
-     * @param bool $detaching
-     * @return array
+     * Sync direct permissions
      */
     public function syncPermissions(array|string|int|Permission $permissions, bool $detaching = true): array
     {
-        $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
 
-        $filteredIds = $this->filterPermissionsItems($permissionsArray);
+        $filteredIds = $this->filterPermissionsItems($permissions);
 
-        if (empty($filteredIds)) {
-            return [];
-        }
+        if (empty($filteredIds)) return [];
 
         $result = $detaching
             ? $this->permissions()->sync($filteredIds)
@@ -151,12 +144,10 @@ trait HasAuthorization
 
     /**
      * Filter and resolve permission items to IDs
-     *
-     * @param array $permissionsArray
-     * @return array
      */
-    protected function filterPermissionsItems(array $permissionsArray): array
+    protected function filterPermissionsItems(array|string|int|Permission $permissions): array
     {
+        $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
 
         if (empty($permissionsArray)) return [];
 
@@ -164,23 +155,42 @@ trait HasAuthorization
         $titles = [];
 
         foreach ($permissionsArray as $item) {
-            match (true) {
-                $item instanceof Permission => $ids[] = $item->id,
-                is_numeric($item)           => $ids[] = $item,
-                is_string($item)            => $titles[] = $item,
-                default                     => null
-            };
+
+            if ($item instanceof Permission) {
+                $ids[] = $item->getKey();
+                continue;
+            }
+
+            if (is_int($item)) {
+                $ids[] = $item;
+                continue;
+            }
+
+            if (is_string($item)) {
+                if (is_numeric($item)) $ids[] = (int)$item;
+                else   $titles[] = $item;
+            }
         }
 
-        if (!empty($titles)) {
-            $roleIdsFromTitles = Permission::query()
-                                           ->whereIn('id', $ids)
-                                           ->orWhereIn('title', $titles)
-                                           ->pluck('id')
-                                           ->toArray();
-            $ids = array_merge($ids, $roleIdsFromTitles);
+        $ids = array_values(array_unique($ids));
+        $titles = array_values(array_unique($titles));
+
+        if (empty($ids) && empty($titles)) return [];
+
+        $query = Permission::query();
+
+        if ($ids !== [] && $titles !== []) {
+            $query->where(function ($query) use ($ids, $titles) {
+                $query->whereIn('id', $ids)->orWhereIn('title', $titles);
+            });
+        } elseif ($ids !== []) {
+            $query->whereIn('id', $ids);
+        } else {
+            $query->whereIn('title', $titles);
         }
-        return array_values(array_unique(array_filter($ids)));
+
+
+        return $query->pluck('id')->toArray();
     }
 
     /**
