@@ -26,11 +26,12 @@ class AuthorizeServiceProvider extends ServiceProvider
     }
 
 
-   protected function registerProviders(): void
-   {
-       $this->app->register(GateServiceProvider::class);
+    protected function registerProviders(): void
+    {
+        $this->app->register(GateServiceProvider::class);
 
-   }
+    }
+
     /**
      * Boot console commands.
      */
@@ -56,12 +57,12 @@ class AuthorizeServiceProvider extends ServiceProvider
     protected function bootPublishing(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/authorize.php' => config_path('authorize.php'),
-        ], ['authorize' ,'authorize-config']);
+            __DIR__ . '/config/authorize.php' => config_path('authorize.php'),
+        ], ['authorize', 'authorize-config']);
 
         $this->publishes([
-            __DIR__ . '/../Migrations/' => database_path('migrations'),
-        ], ['authorize' ,'authorize-migration']);
+            __DIR__ . '/Migrations/' => database_path('migrations'),
+        ], ['authorize', 'authorize-migration']);
     }
 
 

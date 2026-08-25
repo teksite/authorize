@@ -1,6 +1,6 @@
 {
     "name": "teksite/authorize",
-    "description": "authorize package is used to manages permissions of users in Laravel framework to access different parts of the app",
+    "description": "Authorization package for managing roles and permissions in Laravel applications",
     "authors": [
         {
             "name": "Sina Zangiband",
@@ -17,6 +17,10 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.0"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-text"
     },
     "extra": {
         "laravel": {

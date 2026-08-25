@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
-use Teksite\Authorize\Console\AuthInstall;
 use Teksite\Authorize\Models\Permission;
 
 
