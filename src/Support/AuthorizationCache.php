@@ -10,6 +10,12 @@ use Teksite\Authorize\Models\Role;
 
 class AuthorizationCache
 {
+    public const string PREFIX = 'authorize';
+
+    public const string GATE_PERMISSIONS_KEY = 'authorize:permissions:gates';
+
+
+
     public static function forgetModel(Model $model): void
     {
         Cache::forget(self::permissionKey($model));
@@ -21,16 +27,17 @@ class AuthorizationCache
 
     public static function forgetPermissionGates(): void
     {
-        Cache::forget('authorize:permissions:gates');
+        Cache::forget(self::GATE_PERMISSIONS_KEY);
     }
 
     public static function forgetPermission(Permission $permission): void
     {
         self::forgetPermissionGates();
 
+        $permissionId = $permission->getKey();
 
         DB::table('auth_permission_models')
-          ->where('permission_id', $permission->getKey())
+          ->where('permission_id', $permissionId)
           ->get()
           ->each(function ($pivot) {
               self::forgetMorphModel(
@@ -41,7 +48,7 @@ class AuthorizationCache
 
 
         DB::table('auth_permission_role')
-          ->where('permission_id', $permission->getKey())
+          ->where('permission_id', $permissionId)
           ->pluck('role_id')
           ->each(function ($roleId) {
               self::forgetRoleModels($roleId);
@@ -75,6 +82,42 @@ class AuthorizationCache
         self::forgetModel($model);
     }
 
+    /**
+     * Forget caches of models directly assigned to a permission.
+     */
+    public static function forgetPermissionModels(int $permissionId): void
+    {
+        DB::table('auth_permission_models')
+          ->where('permission_id', $permissionId)
+          ->get()
+          ->each(function ($pivot) {
+              self::forgetMorphModel(
+                  $pivot->model_type,
+                  $pivot->model_id
+              );
+          });
+    }
+
+    /**
+     * Permission <-> Role pivot changed.
+     */
+    public static function forgetPermissionRolePivot(
+        int $permissionId,
+        int $roleId
+    ): void {
+        self::forgetPermissionModels($permissionId);
+        self::forgetRoleModels($roleId);
+    }
+
+    /**
+     * Role <-> Model pivot changed.
+     */
+    public static function forgetRoleModelPivot(int $roleId): void
+    {
+        self::forgetRoleModels($roleId);
+    }
+
+
     public static function permissionKey(Model $model): string
     {
         return sprintf('authorize:permissions:%s:%s', $model->getMorphClass(), $model->getKey());
@@ -89,4 +132,5 @@ class AuthorizationCache
     {
         return sprintf('authorize:hierarchy:%s:%s', $model->getMorphClass(), $model->getKey());
     }
+
 }

@@ -34,6 +34,7 @@ class Permission extends Model
         });
 
         static::deleted(function (Permission $permission) {
+            AuthorizationCache::forgetPermission($permission);
             AuthorizationCache::forgetPermissionGates();
         });
     }

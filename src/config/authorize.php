@@ -1,14 +1,32 @@
 <?php
 
 return [
-    'boot_gates'=> true , //boot permission based on the package logic
+    /*
+    |--------------------------------------------------------------------------
+    | Boot Gates
+    |--------------------------------------------------------------------------
+    */
 
-    'boot_gates_in_console' => false ,
+    'boot_gates' => true, //boot permission based on the package logic
+
+    'boot_gates_in_console' => false,
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache
+    |--------------------------------------------------------------------------
+    */
 
     'cache_enabled' => true,
 
-    'cache_ttl' => 86400,
+    'cache_ttl'        => 86400,
 
-    'super_admin_role'=>'administrator',
+    /*
+    |--------------------------------------------------------------------------
+    | Super Admin
+    |--------------------------------------------------------------------------
+    */
+    'super_admin_role' => 'administrator',
 
 ];

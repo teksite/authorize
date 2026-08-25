@@ -410,14 +410,6 @@ trait HasAuthorization
         return AuthorizationCache::permissionKey($this);
     }
 
-    /**
-     * Get cache key for all permissions
-     */
-    protected function getAllPermissionsCacheKey(): string
-    {
-        return $this->cachePrefix . ':all_permissions:' . $this->getKey();
-    }
-
 
     /**
      * Get unique cache identity for this authorization model.
