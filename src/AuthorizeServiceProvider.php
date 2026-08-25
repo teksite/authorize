@@ -36,25 +36,17 @@ class AuthorizeServiceProvider extends ServiceProvider
 
     public function bootGates(): void
     {
-        if (!config('authorize.boot_gates', true)) {
-            return;
-        }
+        if (!config('authorize.boot_gates', true)) return;
 
-        if ($this->app->runningInConsole() && !config('authorize.boot_gates_in_console', false)) {
-            return;
-        }
+        if ($this->app->runningInConsole() && !config('authorize.boot_gates_in_console', false)) return;
 
-        if (!$this->validateDatabaseTables()) {
-            return;
-        }
+        if (!$this->validateDatabaseTables())  return;
+
 
         $permissions = $this->loadPermissions();
 
-        if (empty($permissions)) {
-            return;
-        }
+        if (empty($permissions)) return;
 
-        // Register gates in batch for better performance
         $this->registerGates($permissions);
     }
 
@@ -125,16 +117,13 @@ class AuthorizeServiceProvider extends ServiceProvider
      */
     protected function registerGates(array $permissions): void
     {
-        // Register gates in bulk using a single closure for better memory usage
         Gate::before(function ($user, $ability) use ($permissions) {
-            // Skip if ability is not in our permissions list
             if (!in_array($ability, $permissions, true)) {
                 return null;
             }
 
             $superAdmin = config('authorize.super_admin_role', null);
-            // Super admin bypass
-            if ($superAdmin && $user->hasRole($superAdmin) ?? false) {
+            if ($superAdmin && ($user->hasRole($superAdmin) ?? false)) {
                 return true;
             }
 
@@ -184,11 +173,11 @@ class AuthorizeServiceProvider extends ServiceProvider
     {
         $this->publishes([
             __DIR__ . '/../config/authorize.php' => config_path('authorize.php'),
-        ], 'authorize-config');
+        ], ['authorize' ,'authorize-config']);
 
         $this->publishes([
-            __DIR__ . '/../database/migrations/' => database_path('migrations'),
-        ], 'authorize-migrations');
+            __DIR__ . '/../Migrations/' => database_path('migrations'),
+        ], ['authorize' ,'authorize-migration']);
     }
 
 

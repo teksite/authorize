@@ -65,7 +65,7 @@ class Role extends Model
         $userClass = config('auth.providers.users.model',
             class_exists(\Lareon\Steward\App\Models\User::class) ? \Lareon\Steward\App\Models\User::class : \App\Models\User::class
         );
-        return $this->belongsToMany($userClass, 'auth_permission_role');
+        return $this->belongsToMany($userClass, 'auth_role_models');
     }
 
 }

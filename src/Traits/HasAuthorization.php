@@ -129,14 +129,13 @@ trait HasAuthorization
     public function hasPermission(string|int|array|Permission $permissions, bool $any = true): bool
     {
         $this->getAllPermissions();
+
         $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
 
-        if (empty($permissionsArray)) {
-            return false;
-        }
-        if ($this->isSuperAdmin()) {
-            return true;
-        }
+        if (empty($permissionsArray)) return false;
+
+        if ($this->isSuperAdmin())  return true;
+
 
         $userPermissions = $this->getAllPermissions(true);
         $filteredIds = $this->filterPermissionsItems($permissionsArray);
@@ -144,11 +143,9 @@ trait HasAuthorization
         $intersection = array_intersect($userPermissions, $filteredIds);
         $count = count($intersection);
 
-        if ($any) {
-            return $count > 0;
-        }
+        if ($any)  return $count > 0;
 
-        return $count === count($permissionsArray);
+        return $count == ($filteredIds);
     }
 
 
@@ -304,7 +301,7 @@ trait HasAuthorization
      */
     protected function getCacheDuration(): string
     {
-        return config('authorize.super_admin_role', $this->cacheDuration) ?? 86400;
+        return config('authorize.cache_ttl', $this->cacheDuration) ?? 86400;
 
     }
 
@@ -359,7 +356,7 @@ trait HasAuthorization
     public function isSuperAdmin(): bool
     {
         $superAdmin = config('authorize.super_admin_role', null);
-        if ($superAdmin && $this->hasRole($superAdmin) ?? false) {
+        if ($superAdmin && ($this->hasRole($superAdmin) ?? false)) {
             return true;
         }
         return false;
