@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
 use Teksite\Authorize\factories\PermissionFactory;
+use Teksite\Authorize\Support\AuthorizationCache;
 
 #[UseFactory(PermissionFactory::class)]
 #[Fillable(['title', 'description'])]
@@ -23,8 +24,17 @@ class Permission extends Model
     protected static function boot()
     {
         parent::boot();
-        self::created(function ($permission) {
-            cache()->forget('permissions');
+
+        static::created(function (Permission $permission) {
+            AuthorizationCache::forgetPermissionGates();
+        });
+
+        static::updated(function (Permission $permission) {
+            AuthorizationCache::forgetPermission($permission);
+        });
+
+        static::deleted(function (Permission $permission) {
+            AuthorizationCache::forgetPermissionGates();
         });
     }
 

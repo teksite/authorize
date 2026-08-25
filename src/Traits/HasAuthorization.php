@@ -8,18 +8,10 @@ use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Teksite\Authorize\Models\Permission;
 use Teksite\Authorize\Models\Role;
+use Teksite\Authorize\Support\AuthorizationCache;
 
 trait HasAuthorization
 {
-    /**
-     * Cache duration in seconds (default: 1 hour)
-     */
-    public int $cacheDuration = 3600;
-
-    /**
-     * Cache prefix for permissions
-     */
-    public string $cachePrefix = 'authorize';
 
     /**
      * @return MorphToMany
@@ -223,10 +215,10 @@ trait HasAuthorization
         $permissions = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
             $this->loadMissing('permissions', 'roles.permissions');
 
-            return $this->permissions->merge($this->roles->flatMap(fn (Role $role) => $role->permissions))
-                ->unique('id')
-                ->pluck('title', 'id')
-                ->toArray();
+            return $this->permissions->merge($this->roles->flatMap(fn(Role $role) => $role->permissions))
+                                     ->unique('id')
+                                     ->pluck('title', 'id')
+                                     ->toArray();
         });
 
         return $onlyIds
@@ -289,27 +281,24 @@ trait HasAuthorization
      */
     public function hierarchy(bool $min = true, bool $max = false): array|float|null
     {
-        $stats = Cache::remember($this->getHierarchyCacheKey(), $this->getCacheDuration(), function () {
+        $stats = $this->rememberAuthorizationCache($this->getHierarchyCacheKey(), function () {
+
             return $this->roles()
                         ->selectRaw('MIN(hierarchy) as min_hierarchy, MAX(hierarchy) as max_hierarchy')
                         ->first();
         });
 
-        if (!$stats || ($stats->min_hierarchy === null && $stats->max_hierarchy === null)) {
-            return null;
-        }
+        if (!$stats || ($stats->min_hierarchy === null && $stats->max_hierarchy === null)) return null;
 
-        if ($min && !$max) {
-            return (float)$stats->min_hierarchy;
-        }
+        if ($min && !$max) return $stats->min_hierarchy;
 
-        if (!$min && $max) {
-            return (float)$stats->max_hierarchy;
-        }
+
+        if (!$min && $max) return $stats->max_hierarchy;
+
 
         return [
-            'min' => (float)$stats->min_hierarchy,
-            'max' => (float)$stats->max_hierarchy,
+            'min' => $stats->min_hierarchy,
+            'max' => $stats->max_hierarchy,
         ];
 
     }
@@ -363,9 +352,7 @@ trait HasAuthorization
      */
     public function clearAuthorizationCache(): void
     {
-        Cache::forget($this->getPermissionCacheKey());
-        Cache::forget($this->getRoleCacheKey());
-        Cache::forget($this->getHierarchyCacheKey());
+        AuthorizationCache::forgetModel($this);
     }
 
     /**
@@ -403,7 +390,7 @@ trait HasAuthorization
      */
     protected function getRoleCacheKey(): string
     {
-        return sprintf('%s:roles:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+        return AuthorizationCache::roleKey($this);
     }
 
 
@@ -412,16 +399,15 @@ trait HasAuthorization
      */
     protected function getHierarchyCacheKey(): string
     {
-        return sprintf('%s:hierarchy:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+        return AuthorizationCache::hierarchyKey($this);
     }
-
 
     /**
      * Get permission cache key.
      */
     protected function getPermissionCacheKey(): string
     {
-        return sprintf('%s:permissions:%s', $this->cachePrefix, $this->getAuthorizationCacheIdentifier());
+        return AuthorizationCache::permissionKey($this);
     }
 
     /**

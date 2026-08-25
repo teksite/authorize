@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
 use Teksite\Authorize\factories\RoleFactory;
+use Teksite\Authorize\Support\AuthorizationCache;
 
 
 #[UseFactory(RoleFactory::class)]
@@ -21,11 +22,18 @@ class Role extends Model
 
     protected $table = 'auth_roles';
 
-    /**
-     * Suggested rules for creating a new entry
-     *
-     * @return string[]
-     */
+    protected static function booted(): void
+    {
+        parent::booted();
+
+        static::saved(function (Role $role) {
+            AuthorizationCache::forgetRole($role);
+        });
+
+        static::deleted(function (Role $role) {
+            AuthorizationCache::forgetRole($role);
+        });
+    }
 
     public static function rules(string $operation = 'create', ?int $ignoreId = null): array
     {

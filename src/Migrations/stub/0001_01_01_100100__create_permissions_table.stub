@@ -17,9 +17,13 @@ return new class extends Migration
             $table->string('description')->nullable();
             $table->timestamps();
         });
+
+
         Schema::create('auth_permission_models', function (Blueprint $table) {
             $table->foreignId('permission_id')->constrained('auth_permissions')->cascadeOnDelete()->cascadeOnUpdate();
             $table->morphs('model');
+
+            $table->unique(['permission_id','model_type','model_id',]);
         });
     }
 
