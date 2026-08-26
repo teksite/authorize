@@ -12,10 +12,9 @@ class HasAuthorizationTest extends TestCase
 {
     private function user(): TestUser
     {
-        return TestUser::create(['name' => 'Ada', 'email' => 'ada@example.com']);
+        return TestUser::create(['name' => 'Ada', 'email' => fake()->unique()->safeEmail(),]);
     }
 
-    // --- Direct permissions -------------------------------------------------
 
     public function test_sync_permissions_by_id(): void
     {
@@ -227,8 +226,8 @@ class HasAuthorizationTest extends TestCase
         $user = $this->user();
         $user->assignRole([$low->id, $high->id]);
 
-        $this->assertSame(10.0, (float) $user->hierarchy(min: true, max: false));
-        $this->assertSame(50.0, (float) $user->hierarchy(min: false, max: true));
+        $this->assertSame(10.0, (float)$user->hierarchy(min: true, max: false));
+        $this->assertSame(50.0, (float)$user->hierarchy(min: false, max: true));
         $this->assertSame(
             ['min' => 10.0, 'max' => 50.0],
             array_map('floatval', $user->hierarchy(min: true, max: true))

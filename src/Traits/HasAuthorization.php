@@ -40,6 +40,9 @@ trait HasAuthorization
             ? $this->permissions()->sync($filteredIds)
             : $this->permissions()->syncWithoutDetaching($filteredIds);
 
+        $this->unsetRelation('permissions');
+        $this->unsetRelation('roles');
+
         $this->clearAuthorizationCache();
 
         return $result;
@@ -58,6 +61,7 @@ trait HasAuthorization
             ? $this->roles()->sync($filteredIds)
             : $this->roles()->syncWithoutDetaching($filteredIds);
 
+        $this->unsetRelation('roles');
         $this->clearAuthorizationCache();
 
         return $result;
@@ -87,11 +91,13 @@ trait HasAuthorization
      */
     public function hasPermission(string|int|array|Permission $permissions, bool $any = true): bool
     {
+
+        if ($this->isSuperAdmin()) return true;
+
         $requestedIds = $this->resolvePermissionIds($permissions);
 
         if (empty($requestedIds)) return false;
 
-        if ($this->isSuperAdmin()) return true;
 
         $modelPermissionIds = $this->getAllPermissions(true);
 

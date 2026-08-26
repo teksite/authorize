@@ -42,8 +42,15 @@ class AuthorizeServiceProviderTest extends TestCase
 
         foreach ($paths as $from => $to) {
             $this->assertFileExists($from);
-            $this->assertStringEndsWith('config/authorize.php', $to);
-        }
+            $this->assertSame(
+                'authorize.php',
+                basename($to)
+            );
+
+            $this->assertSame(
+                'config',
+                basename(dirname($to))
+            );        }
     }
 
     public function test_migrations_are_publishable_under_the_correct_tags(): void
