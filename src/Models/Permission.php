@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Validation\Rule;
 use Teksite\Authorize\Factories\PermissionFactory;
-use Teksite\Authorize\Support\AuthorizationCache;
 
 #[UseFactory(PermissionFactory::class)]
 #[Fillable(['title', 'description'])]

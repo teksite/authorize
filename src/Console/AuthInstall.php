@@ -61,7 +61,7 @@ class AuthInstall extends Command
         }
     }
 
-    private function publishConfigFile()
+    private function publishConfigFile(): int
     {
         return $this->call('vendor:publish', [
             '--tag'   => 'authorize-config',
