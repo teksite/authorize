@@ -25,7 +25,7 @@ class AuthorizeServiceProvider extends ServiceProvider
     {
         $this->bootCommands();
         $this->bootPublishing();
-        $this->bootObservers()
+        $this->bootObservers();
     }
 
 
