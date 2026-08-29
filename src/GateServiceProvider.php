@@ -13,7 +13,7 @@ use Teksite\Authorize\Models\Permission;
 class GateServiceProvider extends ServiceProvider
 {
 
-    public const int CACHE_TTL = 86400;
+    public const int CACHE_TTL = 2592000;
 
     public const string PERMISSIONS_CACHE_KEY = 'authorize:permissions:gates';
 

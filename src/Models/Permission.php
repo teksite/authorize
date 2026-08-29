@@ -21,23 +21,6 @@ class Permission extends Model
 
     protected $table = 'auth_permissions';
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::created(function (Permission $permission) {
-            AuthorizationCache::forgetPermissionGates();
-        });
-
-        static::updated(function (Permission $permission) {
-            AuthorizationCache::forgetPermission($permission);
-        });
-
-        static::deleted(function (Permission $permission) {
-            AuthorizationCache::forgetPermission($permission);
-            AuthorizationCache::forgetPermissionGates();
-        });
-    }
 
     /**
      * Suggested rules for creating a new entry

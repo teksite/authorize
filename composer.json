@@ -1,6 +1,14 @@
 {
     "name": "teksite/authorize",
     "description": "Authorization package for managing roles and permissions in Laravel applications",
+    "keywords": [
+        "laravel",
+        "authorization",
+        "authentication",
+        "roles",
+        "permissions",
+        "acl"
+    ],
     "authors": [
         {
             "name": "Sina Zangiband",
@@ -8,11 +16,11 @@
         }
     ],
     "minimum-stability": "dev",
+    "prefer-stable": true,
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Teksite\\Authorize\\": "src/",
-            "Teksite\\Authorize\\Tests\\": "tests/"
+            "Teksite\\Authorize\\": "src/"
         }
     },
     "require": {

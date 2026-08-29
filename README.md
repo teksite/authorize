@@ -111,7 +111,7 @@ return [
 
     'cache_enabled' => true,
 
-    'cache_ttl' => 86400,
+    'cache_ttl' => 2,592,000,
 
 
     /*
@@ -170,7 +170,7 @@ When disabled, authorization data is loaded directly from the database.
 Defines the authorization cache lifetime in seconds.
 
 ```php
-'cache_ttl' => 86400,
+'cache_ttl' => 2,592,000,
 ```
 
 The default value is 24 hours.
@@ -901,7 +901,7 @@ Cache can be configured using:
 
 ```php
 'cache_enabled' => true,
-'cache_ttl' => 86400,
+'cache_ttl' => 2,592,000,
 ```
 
 ---

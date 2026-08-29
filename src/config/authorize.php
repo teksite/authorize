@@ -20,7 +20,7 @@ return [
 
     'cache_enabled' => true,
 
-    'cache_ttl'        => 86400,
+    'cache_ttl'        => 2592000,
 
     /*
     |--------------------------------------------------------------------------
@@ -29,4 +29,15 @@ return [
     */
     'super_admin_role' => 'administrator',
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Observers and Events
+    |--------------------------------------------------------------------------
+    */
+    'observers'        => [
+
+        'permission' => \Teksite\Authorize\Observers\PermissionObserver::class,
+        'role'       => \Teksite\Authorize\Observers\RoleObserver::class,
+    ],
 ];
