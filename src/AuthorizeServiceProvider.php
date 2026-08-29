@@ -82,3 +82,4 @@ class AuthorizeServiceProvider extends ServiceProvider
             };
         }
     }
+}
