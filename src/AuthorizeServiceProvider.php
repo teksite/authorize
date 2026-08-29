@@ -4,6 +4,8 @@ namespace Teksite\Authorize;
 
 use Illuminate\Support\ServiceProvider;
 use Teksite\Authorize\Console\AuthInstall;
+use Teksite\Authorize\Models\Permission;
+use Teksite\Authorize\Models\Role;
 
 
 class AuthorizeServiceProvider extends ServiceProvider
@@ -23,6 +25,7 @@ class AuthorizeServiceProvider extends ServiceProvider
     {
         $this->bootCommands();
         $this->bootPublishing();
+        $this->bootObservers()
     }
 
 
@@ -65,5 +68,17 @@ class AuthorizeServiceProvider extends ServiceProvider
         ], ['authorize', 'authorize-migration']);
     }
 
+    protected function bootObservers(): void
+    {
+        $observers = config('authorize.observers', []);
 
-}
+        foreach ($observers as $model => $observer) {
+            if (!$observer) continue;
+
+            match ($model) {
+                'permission' => Permission::observe($observer),
+                'role'       => Role::observe($observer),
+                default      => null,
+            };
+        }
+    }

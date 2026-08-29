@@ -36,7 +36,6 @@ return [
     |--------------------------------------------------------------------------
     */
     'observers'        => [
-
         'permission' => \Teksite\Authorize\Observers\PermissionObserver::class,
         'role'       => \Teksite\Authorize\Observers\RoleObserver::class,
     ],
