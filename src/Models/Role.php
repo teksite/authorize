@@ -22,19 +22,6 @@ class Role extends Model
 
     protected $table = 'auth_roles';
 
-    protected static function booted(): void
-    {
-        parent::booted();
-
-        static::saved(function (Role $role) {
-            AuthorizationCache::forgetRole($role);
-        });
-
-        static::deleted(function (Role $role) {
-            AuthorizationCache::forgetRole($role);
-        });
-    }
-
     public static function rules(string $operation = 'create', ?int $ignoreId = null): array
     {
 
