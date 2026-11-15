@@ -2,9 +2,9 @@
 
 namespace Teksite\Authorize\Traits;
 
+use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 use Teksite\Authorize\Models\Permission;
 use Teksite\Authorize\Models\Role;
@@ -34,15 +34,14 @@ trait HasAuthorization
      */
     public function syncPermissions(array|string|int|Permission $permissions, bool $detaching = true): array
     {
-        $filteredIds = $this->resolvePermissionIds($permissions);
+        $ids = $this->resolvePermissionIds($permissions);
 
         $result = $detaching
-            ? $this->permissions()->sync($filteredIds)
-            : $this->permissions()->syncWithoutDetaching($filteredIds);
+            ? $this->permissions()->sync($ids)
+            : $this->permissions()->syncWithoutDetaching($ids);
 
         $this->unsetRelation('permissions');
         $this->unsetRelation('roles');
-
         $this->clearAuthorizationCache();
 
         return $result;
@@ -55,11 +54,11 @@ trait HasAuthorization
     public function assignRole(array|int|string|Role $roles, bool $detaching = true): ?array
     {
 
-        $filteredIds = $this->resolveRoleIds($roles);
+        $ids = $this->resolveRoleIds($roles);
 
         $result = $detaching
-            ? $this->roles()->sync($filteredIds)
-            : $this->roles()->syncWithoutDetaching($filteredIds);
+            ? $this->roles()->sync($ids)
+            : $this->roles()->syncWithoutDetaching($ids);
 
         $this->unsetRelation('roles');
         $this->clearAuthorizationCache();
@@ -73,17 +72,9 @@ trait HasAuthorization
      */
     public function hasRole(string|int|array|Role $roles, bool $any = true): bool
     {
-        $requestedIds = $this->resolveRoleIds($roles);
+        [$ids, $titles] = $this->splitAuthorizationIdentifiers($roles, Role::class);
 
-        if (empty($requestedIds)) return false;
-
-        $modelRoleIds = $this->getDirectRoles(true);
-
-        $matched = count(array_intersect($modelRoleIds, $requestedIds));
-
-        return $any
-            ? $matched > 0
-            : $matched === count($requestedIds);
+        return $this->ownsAuthorizationIdentifiers($this->getDirectRoles(), $ids, $titles, $any);
     }
 
     /**
@@ -92,20 +83,14 @@ trait HasAuthorization
     public function hasPermission(string|int|array|Permission $permissions, bool $any = true): bool
     {
 
-        if ($this->isSuperAdmin()) return true;
+        [$ids, $titles] = $this->splitAuthorizationIdentifiers($permissions, Permission::class);
 
-        $requestedIds = $this->resolvePermissionIds($permissions);
+        if (($ids !== [] || $titles !== [])
+            && $this->ownsAuthorizationIdentifiers($this->getAllPermissions(false), $ids, $titles, $any)) {
+            return true;
+        }
 
-        if (empty($requestedIds)) return false;
-
-
-        $modelPermissionIds = $this->getAllPermissions(true);
-
-        $matched = count(array_intersect($modelPermissionIds, $requestedIds));
-
-        return $any
-            ? $matched > 0
-            : $matched === count($requestedIds);
+        return $this->isSuperAdmin();
     }
 
     /**
@@ -113,50 +98,7 @@ trait HasAuthorization
      */
     protected function resolvePermissionIds(array|string|int|Permission $permissions): array
     {
-        $permissionsArray = is_array($permissions) ? $permissions : [$permissions];
-
-        if (empty($permissionsArray)) return [];
-
-        $ids = [];
-        $titles = [];
-
-        foreach ($permissionsArray as $item) {
-
-            if ($item instanceof Permission) {
-                $ids[] = $item->getKey();
-                continue;
-            }
-
-            if (is_int($item)) {
-                $ids[] = $item;
-                continue;
-            }
-
-            if (is_string($item)) {
-                if (is_numeric($item)) $ids[] = (int)$item;
-                else   $titles[] = $item;
-            }
-        }
-
-        $ids = array_values(array_unique($ids));
-        $titles = array_values(array_unique($titles));
-
-        if (empty($ids) && empty($titles)) return [];
-
-        $query = Permission::query();
-
-        if ($ids !== [] && $titles !== []) {
-            $query->where(function ($query) use ($ids, $titles) {
-                $query->whereIn('id', $ids)->orWhereIn('title', $titles);
-            });
-        } elseif ($ids !== []) {
-            $query->whereIn('id', $ids);
-        } else {
-            $query->whereIn('title', $titles);
-        }
-
-
-        return $query->pluck('id')->toArray();
+        return $this->resolveAuthorizationIds(Permission::class, $permissions);
     }
 
     /**
@@ -164,88 +106,111 @@ trait HasAuthorization
      */
     protected function resolveRoleIds(array|int|string|Role $roles): array
     {
-
-        $rolesArray = is_array($roles) ? $roles : [$roles];
-
-        if (empty($rolesArray)) return [];
-
-        $ids = [];
-        $titles = [];
-
-        foreach ($rolesArray as $item) {
-
-            if ($item instanceof Role) {
-                $ids[] = $item->getKey();
-                continue;
-            }
-
-            if (is_int($item)) {
-                $ids[] = $item;
-                continue;
-            }
-
-            if (is_string($item)) {
-                if (is_numeric($item)) $ids[] = (int)$item;
-                else   $titles[] = $item;
-            }
-        }
-
-
-        $ids = array_values(array_unique($ids));
-        $titles = array_values(array_unique($titles));
-
-        if (empty($ids) && empty($titles)) return [];
-
-        $query = Role::query();
-
-        if ($ids !== [] && $titles !== []) {
-            $query->where(function ($query) use ($ids, $titles) {
-                $query->whereIn('id', $ids)->orWhereIn('title', $titles);
-            });
-        } elseif ($ids !== []) {
-            $query->whereIn('id', $ids);
-        } else {
-            $query->whereIn('title', $titles);
-        }
-
-        return $query->pluck('id')->toArray();
+        return $this->resolveAuthorizationIds(Role::class, $roles);
     }
 
     /**
-     * Get all permissions of the model.
+     * Resolve ids/titles/instances to existing row ids (used for writes only).
+     */
+    protected function resolveAuthorizationIds(string $modelClass, array|string|int|Model $items): array
+    {
+        [$ids, $titles] = $this->splitAuthorizationIdentifiers($items, $modelClass);
+
+        if ($ids === [] && $titles === []) return [];
+
+        return $modelClass::query()->where(function ($query) use ($ids, $titles) {
+            if ($ids !== []) $query->whereIn('id', $ids);
+            if ($titles !== []) $query->orWhereIn('title', $titles);
+        })->pluck('id')->all();
+
+    }
+
+    /**
+     * @return array{0: int[], 1: string[]}
+     */
+    protected function splitAuthorizationIdentifiers(array|string|int|Model $items, string $modelClass): array
+    {
+        $ids = [];
+        $titles = [];
+
+        foreach (is_array($items) ? $items : [$items] as $item) {
+            if ($item instanceof $modelClass) {
+                $ids[] = (int)$item->getKey();
+            } elseif (is_int($item)) {
+                $ids[] = $item;
+            } elseif (is_string($item)) {
+                if (is_numeric($item)) {
+                    $ids[] = (int)$item;
+                } else {
+                    $titles[] = $item;
+                }
+            }
+        }
+
+        return [array_values(array_unique($ids)), array_values(array_unique($titles))];
+    }
+
+
+    /**
+     * Match against owned [id => title]. In "all" mode EVERY requested identifier
+     * must be owned: unknown identifiers count as missing (fail closed).
      *
-     * Includes direct permissions and role permissions.
+     * @param array<int, string> $owned
+     */
+    protected function ownsAuthorizationIdentifiers(array $owned, array $ids, array $titles, bool $any): bool
+    {
+        $requested = count($ids) + count($titles);
+
+        if ($requested === 0) return false;
+
+        $matched = 0;
+
+        foreach ($ids as $id) {
+            if (isset($owned[$id])) $matched++;
+        }
+
+        if ($titles !== []) {
+            $ownedTitles = array_flip($owned);
+
+            foreach ($titles as $title) {
+                if (isset($ownedTitles[$title])) $matched++;
+            }
+        }
+
+        return $any ? $matched > 0 : $matched === $requested;
+    }
+
+
+    /**
+     * [id => title] of direct + role-inherited permissions.
      */
     public function getAllPermissions(bool $onlyIds = true): array
     {
         $permissions = $this->rememberAuthorizationCache($this->getPermissionCacheKey(), function (): array {
-            $this->loadMissing('permissions', 'roles.permissions');
+            $direct = $this->permissions()->pluck('title', 'id')->all();
 
-            return $this->permissions->merge($this->roles->flatMap(fn(Role $role) => $role->permissions))
-                                     ->unique('id')
-                                     ->pluck('title', 'id')
-                                     ->toArray();
+            $viaRoles = Permission::query()->whereIn('id', function ($query) {
+                $query->select('permission_id')
+                      ->from('auth_permission_role')
+                      ->whereIn('role_id', function ($sub) {
+                          $sub->select('role_id')
+                              ->from('auth_role_models')
+                              ->where('model_type', $this->getMorphClass())
+                              ->where('model_id', $this->getKey());
+                      });
+            })->pluck('title', 'id')->all();
+
+            return $direct + $viaRoles;
         });
 
-        return $onlyIds
-            ? array_keys($permissions)
-            : $permissions;
-
+        return $onlyIds ? array_keys($permissions) : $permissions;
     }
 
-    /**
-     *  get permission of the model directly without considering role relation
-     */
     public function getDirectPermissions(): array
     {
         return $this->permissions()->pluck('title', 'id')->toArray();
     }
 
-    /**
-     * get permission of the model by its roles only
-     *
-     * @return array
-     */
     public function getPermissionsByRoles(): array
     {
         $this->loadMissing('roles.permissions');
@@ -259,54 +224,42 @@ trait HasAuthorization
         return $permissions;
     }
 
-    /**
-     * Get direct roles
-     */
     public function getDirectRoles(bool $onlyIds = false): array
     {
-
-        $roles = $this->rememberAuthorizationCache($this->getRoleCacheKey(), function (): array {
-            return $this->roles->pluck('title', 'id')->toArray();
-        });
+        $roles = $this->rememberAuthorizationCache(
+            $this->getRoleCacheKey(),
+            fn(): array => $this->roles()->pluck('title', 'id')->all()
+        );
 
         return $onlyIds ? array_keys($roles) : $roles;
     }
 
-    /**
-     * Determine whether the model is a super administrator.
-     */
     public function isSuperAdmin(): bool
     {
         $role = config('authorize.super_admin_role');
 
-        return ($role !== null) && ($this->hasRole($role));
+        return $role !== null && $this->hasRole($role);
     }
+
 
     /**
      * get hierarchy of the model
      */
     public function hierarchy(bool $min = true, bool $max = false): array|float|null
     {
-        $stats = $this->rememberAuthorizationCache($this->getHierarchyCacheKey(), function () {
+        $stats = $this->rememberAuthorizationCache($this->getHierarchyCacheKey(), function (): array {
+            $values = $this->roles()->pluck('hierarchy')->map(fn($v) => (int)$v);
 
-            return $this->roles()
-                        ->selectRaw('MIN(hierarchy) as min_hierarchy, MAX(hierarchy) as max_hierarchy')
-                        ->first();
+            return $values->isEmpty() ? ['min' => null, 'max' => null] : ['min' => $values->min(), 'max' => $values->max()];
         });
 
-        if (!$stats || ($stats->min_hierarchy === null && $stats->max_hierarchy === null)) return null;
+        if ($stats['min'] === null) return null;
 
-        if ($min && !$max) return $stats->min_hierarchy;
+        if ($min && !$max) return (float)$stats['min'];
 
+        if (!$min && $max) return (float)$stats['max'];
 
-        if (!$min && $max) return $stats->max_hierarchy;
-
-
-        return [
-            'min' => $stats->min_hierarchy,
-            'max' => $stats->max_hierarchy,
-        ];
-
+        return ['min' => $stats['min'], 'max' => $stats['max']];
     }
 
     /**
@@ -314,11 +267,9 @@ trait HasAuthorization
      */
     public function canAccessModelByHierarchy(Model $model): bool|null
     {
-        if (!method_exists($model, 'hierarchy')) {
-            throw new InvalidArgumentException('Model must use HasAuthorization: ' . $model::class);
-        }
+        if (!method_exists($model, 'hierarchy')) throw new InvalidArgumentException('Model must use HasAuthorization: '.$model::class);
 
-        $myHierarchy = $this->hierarchy(true, false);
+        $myHierarchy = $this->hierarchy(min: true, max: false);
 
         if ($myHierarchy === null) return false;
 
@@ -327,7 +278,6 @@ trait HasAuthorization
         if ($targetHierarchy === null) return null;
 
         return $myHierarchy < $targetHierarchy;
-
     }
 
 
@@ -352,14 +302,16 @@ trait HasAuthorization
         return $myHierarchy < $roleModel->hierarchy;
     }
 
-
     /**
      * Clear all authorization caches for this model
+     *
+     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     public function clearAuthorizationCache(): void
     {
         AuthorizationCache::forgetModel($this);
     }
+
 
     /**
      * Warm up cache for this model
@@ -376,7 +328,7 @@ trait HasAuthorization
      */
     protected function getCacheDuration(): int
     {
-        return (int)config('authorize.cache_ttl', 3600);
+        return AuthorizationCache::ttl();
     }
 
 
@@ -385,9 +337,18 @@ trait HasAuthorization
      */
     protected static function bootHasAuthorization(): void
     {
-        static::saved(
-            fn(Model $model) => $model->clearAuthorizationCache()
-        );
+        static::saved(static fn(Model $model) => $model->clearAuthorizationCache());
+
+        static::deleted(static function (Model $model) {
+            $model->clearAuthorizationCache();
+
+            if (!config('authorize.detach_on_delete', true)) return;
+
+            if (method_exists($model, 'isForceDeleting') && !$model->isForceDeleting()) return;
+
+            $model->roles()->detach();
+            $model->permissions()->detach();
+        });
     }
 
 
@@ -417,22 +378,12 @@ trait HasAuthorization
     }
 
 
-    /**
-     * Get unique cache identity for this authorization model.
-     *
-     * Important for User #1 and Admin #1 having the same primary key.
-     */
-    protected function getAuthorizationCacheIdentifier(): string
-    {
-        return $this->getMorphClass() . ':' . $this->getKey();
-    }
-
     protected function rememberAuthorizationCache(string $key, \Closure $callback): mixed
     {
 
         if (!config('authorize.cache_enabled', true)) return $callback();
 
-        return Cache::remember($key, $this->getCacheDuration(), $callback);
+        return AuthorizationCache::remember($key, $callback, $this->getCacheDuration());
     }
 
 }
