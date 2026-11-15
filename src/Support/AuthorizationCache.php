@@ -2,9 +2,14 @@
 
 namespace Teksite\Authorize\Support;
 
+use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Psr\SimpleCache\InvalidArgumentException;
 use Teksite\Authorize\Models\Permission;
 use Teksite\Authorize\Models\Role;
 
@@ -14,104 +19,131 @@ class AuthorizationCache
 
     public const string GATE_PERMISSIONS_KEY = 'authorize:permissions:gates';
 
+    public const int DEFAULT_TTL = 2592000;
+
+    private const string EPOCH_KEY = 'authorize:epoch';
+
+    private const int CHUNK_SIZE = 1000;
+
+    public static function ttl(): int
+    {
+        return (int)config('authorize.cache_ttl', self::DEFAULT_TTL);
+    }
+
+    /**
+     * Invalidate every cached model payload in O(1).
+     * Entries carry the epoch they were computed under; a mismatch is a miss.
+     */
+    public static function bump(): void
+    {
+        Cache::forever(self::EPOCH_KEY, Str::random(16));
+    }
+
+    /**
+     * Epoch-aware remember(). The epoch is read BEFORE the callback runs, so a
+     * value computed concurrently with an invalidation is stored under the old
+     * epoch and can never be served afterward.
+     */
+    public static function remember(string $key, Closure $callback, ?int $ttl = null): mixed
+    {
+        $epoch = self::epoch();
+        $entry = Cache::get($key);
+
+        if (is_array($entry) && ($entry['epoch'] ?? null) === $epoch && array_key_exists('data', $entry)) return $entry['data'];
+
+        $data = $callback();
+
+        Cache::put($key, ['epoch' => $epoch, 'data' => $data], $ttl ?? self::ttl());
+
+        return $data;
+    }
 
 
+    private static function epoch(): string
+    {
+        $epoch = Cache::get(self::EPOCH_KEY);
+
+        if (is_string($epoch) && $epoch !== '') return $epoch;
+
+        Cache::add(self::EPOCH_KEY, Str::random(16));
+
+        $epoch = Cache::get(self::EPOCH_KEY);
+
+        return is_string($epoch) ? $epoch : '0';
+    }
+
+
+    /**
+     * @throws InvalidArgumentException
+     */
     public static function forgetModel(Model $model): void
     {
-        Cache::forget(self::permissionKey($model));
+        $id = $model->getKey();
 
-        Cache::forget(self::roleKey($model));
+        if ($id === null) return;
 
-        Cache::forget(self::hierarchyKey($model));
+        Cache::deleteMultiple(self::keysFor($model->getMorphClass(), $id));
     }
+
 
     public static function forgetPermissionGates(): void
     {
         Cache::forget(self::GATE_PERMISSIONS_KEY);
     }
 
+
     public static function forgetPermission(Permission $permission): void
     {
         self::forgetPermissionGates();
-
-        $permissionId = $permission->getKey();
-
-        DB::table('auth_permission_models')
-          ->where('permission_id', $permissionId)
-          ->get()
-          ->each(function ($pivot) {
-              self::forgetMorphModel(
-                  $pivot->model_type,
-                  $pivot->model_id
-              );
-          });
-
-
-        DB::table('auth_permission_role')
-          ->where('permission_id', $permissionId)
-          ->pluck('role_id')
-          ->each(function ($roleId) {
-              self::forgetRoleModels($roleId);
-          });
+        self::bump();
     }
+
 
     public static function forgetRole(Role $role): void
     {
-        self::forgetRoleModels($role->getKey());
+        self::bump();
     }
 
+
+    /**
+     * Targeted flush for holders of a role. Observers use bump() instead.
+     */
     public static function forgetRoleModels(int $roleId): void
     {
-        DB::table('auth_role_models')
-          ->where('role_id', $roleId)
-          ->get()
-          ->each(function ($pivot) {
-              self::forgetMorphModel(
-                  $pivot->model_type,
-                  $pivot->model_id
-              );
-          });
+        self::forgetFromQuery(DB::table('auth_role_models')->where('role_id', $roleId));
     }
 
-    public static function forgetMorphModel(string  $type, int|string $id): void
+
+    /**
+     * Targeted flush for models that hold a permission directly.
+     */
+    public static function forgetPermissionModels(int $permissionId): void
     {
-        $model = new $type;
-
-        $model->setAttribute($model->getKeyName(), $id);
-
-        self::forgetModel($model);
+        self::forgetFromQuery(DB::table('auth_permission_models')->where('permission_id', $permissionId));
     }
+
+
+    /**
+     * $type is the value stored in model_type (FQCN or morph-map alias).
+     * It is used as-is: never instantiated.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function forgetMorphModel(string $type, int|string $id): void
+    {
+        Cache::deleteMultiple(self::keysFor($type, $id));
+    }
+
 
     /**
      * Forget caches of models directly assigned to a permission.
      */
-    public static function forgetPermissionModels(int $permissionId): void
+    public static function forgetPermissionRolePivot(int $permissionId, int $roleId): void
     {
-        DB::table('auth_permission_models')
-          ->where('permission_id', $permissionId)
-          ->get()
-          ->each(function ($pivot) {
-              self::forgetMorphModel(
-                  $pivot->model_type,
-                  $pivot->model_id
-              );
-          });
+        self::bump();
     }
 
-    /**
-     * Permission <-> Role pivot changed.
-     */
-    public static function forgetPermissionRolePivot(
-        int $permissionId,
-        int $roleId
-    ): void {
-        self::forgetPermissionModels($permissionId);
-        self::forgetRoleModels($roleId);
-    }
 
-    /**
-     * Role <-> Model pivot changed.
-     */
     public static function forgetRoleModelPivot(int $roleId): void
     {
         self::forgetRoleModels($roleId);
@@ -120,17 +152,56 @@ class AuthorizationCache
 
     public static function permissionKey(Model $model): string
     {
-        return sprintf('authorize:permissions:%s:%s', $model->getMorphClass(), $model->getKey());
+        return self::keyFor('permissions', $model->getMorphClass(), $model->getKey());
     }
+
 
     public static function roleKey(Model $model): string
     {
-        return sprintf('authorize:roles:%s:%s', $model->getMorphClass(), $model->getKey());
+        return self::keyFor('roles', $model->getMorphClass(), $model->getKey());
     }
+
 
     public static function hierarchyKey(Model $model): string
     {
-        return sprintf('authorize:hierarchy:%s:%s', $model->getMorphClass(), $model->getKey());
+        return self::keyFor('hierarchy', $model->getMorphClass(), $model->getKey());
+    }
+
+
+    private static function keyFor(string $bucket, string $type, int|string|null $id): string
+    {
+        return sprintf('%s:%s:%s:%s', self::PREFIX, $bucket, $type, $id);
+    }
+
+
+    /** @return string[] */
+    private static function keysFor(string $type, int|string|null $id): array
+    {
+        return [
+            self::keyFor('permissions', $type, $id),
+            self::keyFor('roles', $type, $id),
+            self::keyFor('hierarchy', $type, $id),
+        ];
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    private static function forgetFromQuery(Builder $query): void
+    {
+        $query->select(['model_type', 'model_id'])
+              ->orderBy('model_type')
+              ->orderBy('model_id')
+              ->chunk(
+                  self::CHUNK_SIZE, function (Collection $rows): void {
+                  $keys = [];
+
+                  foreach ($rows as $row) {
+                      array_push($keys, ...self::keysFor($row->model_type, $row->model_id));
+                  }
+
+                  Cache::deleteMultiple($keys);
+              });
     }
 
 }
