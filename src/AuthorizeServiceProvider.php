@@ -50,8 +50,8 @@ class AuthorizeServiceProvider extends ServiceProvider
 
     protected function registerConfigs(): void
     {
-        $configPath = config_path('authorize.php');
-        $this->mergeConfigFrom(file_exists($configPath) ? $configPath : __DIR__ . '/config/authorize.php', 'authorize');
+        $this->mergeConfigFrom(__DIR__ . '/config/authorize.php', 'authorize');
+
     }
 
     /**

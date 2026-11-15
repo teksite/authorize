@@ -39,4 +39,13 @@ return [
         'permission' => \Teksite\Authorize\Observers\PermissionObserver::class,
         'role'       => \Teksite\Authorize\Observers\RoleObserver::class,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup
+    |--------------------------------------------------------------------------
+    | Detach roles/permissions when a model is (force) deleted, so a re-used
+    | primary key can never inherit stale authorization rows.
+    */
+    'detach_on_delete' => true,
 ];

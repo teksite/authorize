@@ -8,14 +8,15 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Teksite\Authorize\Models\Permission;
+use Teksite\Authorize\Support\AuthorizationCache;
 
 
 class GateServiceProvider extends ServiceProvider
 {
 
-    public const int CACHE_TTL = 2592000;
+    public const int CACHE_TTL = AuthorizationCache::DEFAULT_TTL;
 
-    public const string PERMISSIONS_CACHE_KEY = 'authorize:permissions:gates';
+    public const string PERMISSIONS_CACHE_KEY = AuthorizationCache::GATE_PERMISSIONS_KEY;
 
     /**
      * Boot the application events.
@@ -36,9 +37,7 @@ class GateServiceProvider extends ServiceProvider
     {
         if (!config('authorize.boot_gates', true)) return false;
 
-        if ($this->app->runningInConsole() && !config('authorize.boot_gates_in_console', false)) return false;
-
-        return $this->validateDatabaseTables();
+        return !$this->app->runningInConsole() || config('authorize.boot_gates_in_console', false);
     }
 
 
@@ -64,18 +63,24 @@ class GateServiceProvider extends ServiceProvider
     protected function loadPermissions(): array
     {
         try {
+            $cacheEnabled = config('authorize.cache_enabled', true);
 
-            if (!config('authorize.cache_enabled', true)) {
-                return $this->fetchPermissionsFromDatabase();
+            if ($cacheEnabled) {
+                $cached = Cache::get(self::PERMISSIONS_CACHE_KEY);
+
+                if (is_array($cached)) return $cached;
             }
 
-            return Cache::remember(
-                self::PERMISSIONS_CACHE_KEY,
-                config('authorize.cache_ttl', self::CACHE_TTL),
-                fn() => $this->fetchPermissionsFromDatabase()
-            );
+            if (!$this->validateDatabaseTables()) return [];
+
+            $permissions = $this->fetchPermissionsFromDatabase();
+
+            if ($cacheEnabled) Cache::put(self::PERMISSIONS_CACHE_KEY, $permissions, AuthorizationCache::ttl());
+
+            return $permissions;
 
         } catch (\Exception $e) {
+
             Log::error('Authorize: Failed to load permissions', [
                 'error' => $e->getMessage(),
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
@@ -90,18 +95,7 @@ class GateServiceProvider extends ServiceProvider
      */
     protected function fetchPermissionsFromDatabase(): array
     {
-        try {
-            return Permission::query()->select(['title'])
-                             ->pluck('title')
-                             ->filter()
-                             ->values()
-                             ->toArray();
-        } catch (\Exception $e) {
-            Log::error('Authorize: Database query failed', [
-                'error' => $e->getMessage(),
-            ]);
-            return [];
-        }
+        return Permission::query()->pluck('title')->filter()->values()->toArray();
     }
 
     /**
@@ -111,7 +105,7 @@ class GateServiceProvider extends ServiceProvider
     {
         $permissionMap = array_fill_keys($permissions, true);
 
-        Gate::before(function ($subject, string $ability) use ($permissionMap) {
+        Gate::before(static function ($subject, string $ability) use ($permissionMap) {
 
             if (!isset($permissionMap[$ability])) return null;
 
@@ -123,7 +117,7 @@ class GateServiceProvider extends ServiceProvider
         });
 
         foreach ($permissions as $permission) {
-            Gate::define($permission, function ($subject) use ($permission): bool {
+            Gate::define($permission, static function ($subject) use ($permission): bool {
                 try {
                     if (!method_exists($subject, 'hasPermission')) return false;
 
