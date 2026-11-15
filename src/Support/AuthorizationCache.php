@@ -139,7 +139,7 @@ class AuthorizationCache
 
 
     /**
-     * Forget caches of models directly assigned to a permission.
+     * Permission <-> Role pivot changed: invalidates every cached payload.
      */
     public static function forgetPermissionRolePivot(): void
     {

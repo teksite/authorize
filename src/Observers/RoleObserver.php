@@ -10,13 +10,13 @@ class RoleObserver
 {
     public function created(Role $role): void
     {
-        AuthorizationCache::forgetRole($role);
+        AuthorizationCache::forgetRole();
     }
 
 
     public function updated(Role $role): void
     {
-        AuthorizationCache::forgetRole($role);
+        AuthorizationCache::forgetRole();
     }
 
 
@@ -26,15 +26,9 @@ class RoleObserver
     }
 
 
-    public function deleting(Role $role): void
-    {
-        AuthorizationCache::forgetRole($role);
-    }
-
-
     public function deleted(Role $role): void
     {
-        AuthorizationCache::forgetRole($role);
+        AuthorizationCache::forgetRole();
     }
 
 

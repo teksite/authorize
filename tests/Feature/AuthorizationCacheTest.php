@@ -152,9 +152,14 @@ class AuthorizationCacheTest extends TestCase
         $user->warmAuthorizationCache();
 
         $role->update(['description' => 'x']);
-        $this->assertTrue(Cache::has(AuthorizationCache::roleKey($user)));
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $user->getDirectRoles();
+        $this->assertSame([], DB::getQueryLog()); // still served from cache
 
         $role->update(['hierarchy' => 99]);
+
         $this->assertSame(99.0, $user->hierarchy());
     }
 
@@ -235,5 +240,29 @@ class AuthorizationCacheTest extends TestCase
         $user->assignRole($role);
 
         $this->assertTrue($user->hasRole('editor'));
+    }
+
+
+    public function test_forget_model_clears_all_three_cache_buckets(): void
+    {
+        $user = $this->user();
+
+        Cache::put(AuthorizationCache::permissionKey($user), ['x']);
+        Cache::put(AuthorizationCache::roleKey($user), ['x']);
+        Cache::put(AuthorizationCache::hierarchyKey($user), ['x']);
+
+        AuthorizationCache::forgetModel($user);
+
+        $this->assertFalse(Cache::has(AuthorizationCache::permissionKey($user)));
+        $this->assertFalse(Cache::has(AuthorizationCache::roleKey($user)));
+        $this->assertFalse(Cache::has(AuthorizationCache::hierarchyKey($user)));
+    }
+
+    public function test_cache_keys_are_namespaced_by_morph_type_so_different_models_never_collide(): void
+    {
+        $user = $this->user();
+
+        $this->assertStringContainsString($user->getMorphClass(), AuthorizationCache::permissionKey($user));
+        $this->assertStringContainsString((string) $user->getKey(), AuthorizationCache::permissionKey($user));
     }
 }
