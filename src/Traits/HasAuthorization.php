@@ -337,9 +337,11 @@ trait HasAuthorization
      */
     protected static function bootHasAuthorization(): void
     {
-        static::saved(static fn(Model $model) => $model->clearAuthorizationCache());
+        static::saved(function (Model $model) {
+            if (config('authorize.flush_on_save', true)) $model->clearAuthorizationCache();
+        });
 
-        static::deleted(static function (Model $model) {
+        static::deleted(function (Model $model) {
             $model->clearAuthorizationCache();
 
             if (!config('authorize.detach_on_delete', true)) return;

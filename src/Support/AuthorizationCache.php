@@ -18,7 +18,7 @@ class AuthorizationCache
 
     public const string GATE_PERMISSIONS_KEY = 'authorize:permissions:gates';
 
-    public const int DEFAULT_TTL = 2592000;
+    public const int DEFAULT_TTL = 86400;
 
     private const string EPOCH_KEY = 'authorize:epoch';
 
