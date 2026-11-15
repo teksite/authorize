@@ -1,4 +1,3 @@
-
 # Teksite Authorize
 
 A flexible and model-independent authorization package for Laravel.
@@ -33,8 +32,7 @@ The package is designed to work with **any Eloquent model**, not only `User`.
 - Laravel Gate integration
 - Super administrator support
 - Role hierarchy
-- Authorization cache
-- Cache invalidation helpers
+- Authorization cache with automatic invalidation
 - Artisan installation command
 - Factory support
 - Validation rule helpers
@@ -43,9 +41,10 @@ The package is designed to work with **any Eloquent model**, not only `User`.
 
 ## Requirements
 
-This package requires a Laravel application using Eloquent ORM.
+- PHP `^8.3`
+- Laravel `^13.0`
 
-The package uses modern Laravel features such as PHP attributes, so make sure your Laravel and PHP versions support the features used by your installed package version.
+The package uses modern features such as typed class constants and PHP attributes on Eloquent models and Artisan commands, so these minimum versions are required.
 
 ---
 
@@ -63,11 +62,12 @@ Then run the installation command:
 php artisan authorize:install
 ```
 
-This command creates the required authorization migrations inside:
+This command:
 
-```text
-database/migrations
-```
+- copies the authorization migrations into `database/migrations`
+- publishes the configuration file to `config/authorize.php`
+
+Existing files are never overwritten.
 
 After that, run:
 
@@ -84,6 +84,8 @@ The package configuration is available at:
 ```text
 config/authorize.php
 ```
+
+Package defaults are always merged, so a published config file only needs to contain the keys you want to override. Keys added in newer package versions keep working without re-publishing.
 
 Example:
 
@@ -111,7 +113,18 @@ return [
 
     'cache_enabled' => true,
 
-    'cache_ttl' => 2,592,000,
+    'cache_ttl' => 86400, // 24 hours
+
+    'flush_on_save' => true,
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup
+    |--------------------------------------------------------------------------
+    */
+
+    'detach_on_delete' => true,
 
 
     /*
@@ -121,6 +134,18 @@ return [
     */
 
     'super_admin_role' => 'administrator',
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Observers
+    |--------------------------------------------------------------------------
+    */
+
+    'observers' => [
+        'permission' => \Teksite\Authorize\Observers\PermissionObserver::class,
+        'role'       => \Teksite\Authorize\Observers\RoleObserver::class,
+    ],
 
 ];
 ```
@@ -149,7 +174,9 @@ Default:
 'boot_gates_in_console' => false,
 ```
 
-This is useful for avoiding unnecessary database access when running Artisan commands.
+This avoids unnecessary database access when running Artisan commands.
+
+> **Important:** queue workers, scheduled tasks and Artisan commands all run in console mode. With the default value, Gate checks (`Gate::allows()`, `can()`) inside queued jobs and commands will **deny** permission abilities because the Gates are not registered. Set this option to `true` if your jobs or commands rely on permission Gates. Direct calls such as `$user->hasPermission()` are not affected.
 
 ---
 
@@ -170,10 +197,38 @@ When disabled, authorization data is loaded directly from the database.
 Defines the authorization cache lifetime in seconds.
 
 ```php
-'cache_ttl' => 2,592,000,
+'cache_ttl' => 86400,
 ```
 
-The default value is 24 hours.
+The default value is 24 hours (`86400` seconds).
+
+---
+
+#### `flush_on_save`
+
+Determines whether a model's authorization cache is cleared every time the model is saved.
+
+```php
+'flush_on_save' => true,
+```
+
+This is the default for backward compatibility. A model's authorization cache key does not depend on its attributes, so for models that are saved very often (for example, updating `last_login_at` on every login) you can set it to `false` to avoid needless cache operations.
+
+Changes made through the package API (`assignRole()`, `syncPermissions()`, role/permission changes) always invalidate the cache regardless of this option.
+
+---
+
+#### `detach_on_delete`
+
+Determines whether roles and direct permissions of a model are detached when the model is deleted.
+
+```php
+'detach_on_delete' => true,
+```
+
+Polymorphic pivot tables cannot use foreign keys, so without this cleanup the rows of a deleted model would remain. If a primary key is ever reused, the new model would silently inherit the old model's roles and permissions.
+
+For models that use `SoftDeletes`, assignments are kept on soft delete and detached only on force delete.
 
 ---
 
@@ -188,6 +243,12 @@ Defines the role that should bypass permission checks.
 If the authenticated or authorized model has this role, permission checks return `true`.
 
 Set it to `null` if you do not want to use a super administrator role.
+
+---
+
+#### `observers`
+
+Maps the `permission` and `role` models to the observers that keep the authorization cache in sync. Set an entry to `null` to disable it, or point it to your own class (preferably one that extends the package observer).
 
 ---
 
@@ -216,6 +277,8 @@ posts.update
 posts.delete
 ```
 
+> Avoid purely numeric titles (for example `"5"`). Numeric strings are interpreted as IDs when checking permissions.
+
 ---
 
 ## `auth_roles`
@@ -227,7 +290,7 @@ Stores roles.
 | `id` | Role ID |
 | `title` | Unique role name |
 | `description` | Optional description |
-| `hierarchy` | Role hierarchy level |
+| `hierarchy` | Role hierarchy level (**lower number = higher authority**) |
 | `created_at` | Creation timestamp |
 | `updated_at` | Update timestamp |
 
@@ -239,6 +302,8 @@ manager
 editor
 author
 ```
+
+> The database default for `hierarchy` is `15`, which is a **high-authority** value. Always set `hierarchy` explicitly when creating roles.
 
 ---
 
@@ -358,7 +423,7 @@ use Teksite\Authorize\Models\Role;
 $role = Role::create([
     'title' => 'editor',
     'description' => 'Post editor',
-    'hierarchy' => 30,
+    'hierarchy' => 50,
 ]);
 ```
 
@@ -381,6 +446,8 @@ $role->permissions()->sync([
     $updatePermission->id,
 ]);
 ```
+
+Changes made through the `permissions()` relationship (`attach`, `sync`, `detach` with IDs) automatically invalidate the authorization cache. See [Cache Invalidation](#cache-invalidation).
 
 ---
 
@@ -418,6 +485,8 @@ To keep existing roles:
 ```php
 $user->assignRole('editor', false);
 ```
+
+> **Warning:** unknown titles and IDs are silently ignored. With the default replace behavior, `assignRole('edtior')` (typo) results in an empty list and **removes all existing roles** of the model. The same applies to `syncPermissions()`.
 
 ---
 
@@ -461,6 +530,17 @@ $user->syncPermissions([
     'posts.create',
 ], false);
 ```
+
+---
+
+# Matching Rules
+
+`hasRole()` and `hasPermission()` accept an ID, a title, a model instance, or an array of those.
+
+- Numeric strings (`"5"`) are treated as IDs.
+- Titles are matched **exactly and case-sensitively** (`'Editor'` does not match `'editor'`), regardless of the database collation.
+- By default, **any** requested item is enough.
+- With `$any = false`, **every** requested item must be owned. An item that does not exist (for example a typo) counts as not owned, so the check fails.
 
 ---
 
@@ -721,6 +801,8 @@ You can also check it directly:
 $user->isSuperAdmin();
 ```
 
+The bypass also applies to Laravel Gates, but only for abilities that are registered permissions.
+
 ---
 
 # Laravel Gates
@@ -764,6 +846,12 @@ hasPermission()
 
 method.
 
+Notes:
+
+- The list of permission names is cached (see `cache_ttl`) and is refreshed automatically when a permission is created, renamed or deleted.
+- Gates are registered when the application boots. In long-running workers (for example Laravel Octane), restart the workers after adding new permissions.
+- Gates are not booted in console mode by default. See [`boot_gates_in_console`](#boot_gates_in_console).
+
 ---
 
 # Route Authorization
@@ -782,26 +870,27 @@ Route::get('/posts', function () {
 
 # Role Hierarchy
 
-Roles have a `hierarchy` value.
+Roles have a `hierarchy` value. **A lower number means higher authority.**
 
 For example:
 
 ```text
-administrator = 100
-manager       = 70
-editor        = 40
-author        = 20
+administrator = 10
+manager       = 30
+editor        = 50
+author        = 70
+viewer        = 90
 ```
 
-A lower hierarchy value can access a higher hierarchy value according to the package's hierarchy comparison logic.
+A model can access (manage) another model or role only when its own hierarchy number is **strictly lower** than the target's. Equal values are not enough.
 
-The model's minimum hierarchy can be retrieved with:
+The model's strongest (minimum) hierarchy value can be retrieved with:
 
 ```php
 $user->hierarchy();
 ```
 
-The maximum hierarchy:
+The weakest (maximum) value:
 
 ```php
 $user->hierarchy(false, true);
@@ -810,13 +899,7 @@ $user->hierarchy(false, true);
 Both values:
 
 ```php
-$user->hierarchy(false, true);
-```
-
-or:
-
-```php
-$user->hierarchy(false, true);
+$user->hierarchy(true, true);
 ```
 
 returns:
@@ -827,6 +910,10 @@ returns:
     'max' => ...,
 ]
 ```
+
+`null` is returned when the model has no roles.
+
+When a model has several roles, the minimum value (the strongest role) is used for comparisons.
 
 ---
 
@@ -854,7 +941,7 @@ or:
 null
 ```
 
-`null` means the target model does not have a hierarchy value.
+`false` is also returned when the current model has no roles. `null` means the target model does not have a hierarchy value.
 
 The target model must use:
 
@@ -884,6 +971,8 @@ Using a Role model:
 $user->canAccessRoleByHierarchy($role);
 ```
 
+`null` is returned when the role does not exist.
+
 ---
 
 # Authorization Cache
@@ -901,7 +990,7 @@ Cache can be configured using:
 
 ```php
 'cache_enabled' => true,
-'cache_ttl' => 2,592,000,
+'cache_ttl' => 86400,
 ```
 
 ---
@@ -957,6 +1046,10 @@ Admin #1
 
 will have different authorization cache keys.
 
+Each cached value also carries a global *epoch* token (stored under `authorize:epoch`). Changes that affect many models at once (a role or permission is changed, or a role/permission relation changes) simply replace the epoch, which invalidates every cached value in a single cheap operation. Outdated entries are ignored and then expire by TTL. A value that was being computed while an invalidation happened can never be served afterwards.
+
+Because of this, authorization data is always at most as stale as the last invalidation, and never longer than `cache_ttl`.
+
 ---
 
 # Polymorphic Authorization
@@ -1011,6 +1104,8 @@ $role->permissions;
 ```
 
 A Role can be assigned to many models through the polymorphic relation.
+
+The pivot of the role/permission relation is the `Teksite\Authorize\Models\PermissionRole` model.
 
 ---
 
@@ -1118,7 +1213,7 @@ $update = Permission::create([
 $editor = Role::create([
     'title' => 'editor',
     'description' => 'Can manage posts',
-    'hierarchy' => 40,
+    'hierarchy' => 50,
 ]);
 
 $editor->permissions()->sync([
@@ -1190,47 +1285,56 @@ $model->hasPermission('posts.update');
 the package checks:
 
 ```text
-1. Is the requested permission valid?
-2. Is the model a super administrator?
-3. Does the model have the permission directly?
-4. Does any assigned role provide the permission?
-5. Return the authorization result.
+1. Do the requested identifiers (ID, title, model) resolve to a valid list?
+2. Does the model own the permission(s), directly or through a role?
+   (any / all, depending on the $any argument)
+3. If not, is the model a super administrator?
+4. Return the authorization result.
 ```
 
 ---
 
 # Cache Invalidation
 
-The package automatically clears relevant model caches when authorization-related models are changed.
+The package clears the relevant caches automatically in these situations:
 
-Examples include:
+| Change | What happens |
+|---|---|
+| `assignRole()` / `syncPermissions()` | That model's cache is cleared |
+| A model using `HasAuthorization` is saved | That model's cache is cleared (see `flush_on_save`) |
+| A model using `HasAuthorization` is deleted | Its cache is cleared and its roles/permissions are detached (see `detach_on_delete`) |
+| A Role's `title` or `hierarchy` changes, or a Role is deleted | All authorization caches are invalidated |
+| A Permission's `title` changes, or a Permission is deleted | All authorization caches and the Gate list are invalidated |
+| A Permission is created | The Gate list is refreshed |
+| `attach()`, `sync()` or `detach($ids)` on `$role->permissions()` or `$permission->roles()` | All authorization caches are invalidated |
 
-- Permission created
-- Permission updated
-- Permission deleted
-- Role saved
-- Role deleted
-- Authorization model saved
+Changing only the `description` of a role or permission does not clear any cache.
 
-The package also provides cache helper methods for relationship/pivot changes.
+The following changes bypass Eloquent events, so they are **not** detected automatically:
 
-For custom direct manipulation of authorization pivot relationships, make sure the relevant authorization cache is invalidated.
+- `$role->permissions()->detach()` called without arguments
+- Changes made with the query builder or raw SQL
+- Rows removed by database-level cascades
+- Calling `attach()` / `detach()` directly on `$model->roles()` or `$model->permissions()`
 
-For example, when changing role permissions directly:
+After such changes, clear the cache manually:
 
 ```php
-$role->permissions()->sync($permissionIds);
+use Teksite\Authorize\Support\AuthorizationCache;
+
+// a role or permission changed
+AuthorizationCache::forgetRole($role);
+AuthorizationCache::forgetPermission($permission);
+
+// a single model changed
+$user->clearAuthorizationCache();
 ```
-
-you should ensure affected authorization model caches are cleared appropriately.
-
-For package-level integrations, the methods available in `AuthorizationCache` can be used for this purpose.
 
 ---
 
 # Artisan Command
 
-Install authorization migrations:
+Install authorization migrations and the configuration file:
 
 ```bash
 php artisan authorize:install
@@ -1249,7 +1353,13 @@ inside:
 database/migrations
 ```
 
-Existing migration files are not overwritten.
+and publishes:
+
+```text
+config/authorize.php
+```
+
+Existing files are not overwritten.
 
 ---
 
@@ -1280,7 +1390,7 @@ To disable authorization caching:
 'cache_enabled' => false,
 ```
 
-Authorization data will then be resolved directly without using the package cache.
+Authorization data will then be resolved directly from the database without using the package cache.
 
 ---
 
@@ -1323,21 +1433,21 @@ author
 viewer
 ```
 
-with hierarchy values such as:
+with hierarchy values such as (lower number = higher authority):
 
 ```text
-administrator = 100
-manager       = 70
+administrator = 10
+manager       = 30
 editor        = 50
-author        = 30
-viewer        = 10
+author        = 70
+viewer        = 90
 ```
 
 The exact hierarchy values are application-dependent.
 
 ---
 
-#  Summary
+# Summary
 
 ## Model Methods
 
@@ -1394,13 +1504,11 @@ Role::factory()
 $role->permissions()
 ```
 
-
+---
 
 # License
 
-This package is open-source software.
-
-Add your project's license information here.
+This package is open-source software licensed under the [MIT license](https://opensource.org/licenses/MIT).
 
 ---
 
