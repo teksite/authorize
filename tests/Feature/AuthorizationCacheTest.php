@@ -13,7 +13,7 @@ use Teksite\Authorize\Support\AuthorizationCache;
 use Teksite\Authorize\Tests\Fixtures\TestUser;
 use Teksite\Authorize\Tests\TestCase;
 
-class AuthorizationHardeningTest extends TestCase
+class AuthorizationCacheTest extends TestCase
 {
     private function user(string $email = 'ada@example.com'): TestUser
     {
@@ -189,5 +189,51 @@ class AuthorizationHardeningTest extends TestCase
         (new GateServiceProvider($this->app))->boot();
 
         $this->assertSame([], DB::getQueryLog());
+    }
+
+    public function test_default_cache_ttl_is_24_hours(): void
+    {
+        $defaults = require __DIR__ . '/../../src/config/authorize.php';
+
+        $this->assertSame(86400, $defaults['cache_ttl']);
+        $this->assertSame(86400, AuthorizationCache::DEFAULT_TTL);
+        $this->assertTrue($defaults['flush_on_save']);
+        $this->assertTrue($defaults['detach_on_delete']);
+    }
+
+    public function test_saving_a_model_flushes_its_cache_by_default(): void
+    {
+        $user = $this->user();
+        $user->warmAuthorizationCache();
+        $this->assertTrue(Cache::has(AuthorizationCache::roleKey($user)));
+
+        $user->update(['name' => 'Grace']);
+
+        $this->assertFalse(Cache::has(AuthorizationCache::roleKey($user)));
+    }
+
+    public function test_flush_on_save_can_be_disabled(): void
+    {
+        config(['authorize.flush_on_save' => false]);
+
+        $user = $this->user();
+        $user->warmAuthorizationCache();
+
+        $user->update(['name' => 'Grace']);
+
+        $this->assertTrue(Cache::has(AuthorizationCache::roleKey($user)));
+    }
+
+    public function test_assign_role_still_invalidates_when_flush_on_save_is_disabled(): void
+    {
+        config(['authorize.flush_on_save' => false]);
+
+        $user = $this->user();
+        $role = Role::factory()->create(['title' => 'editor']);
+        $this->assertFalse($user->hasRole('editor')); // warm
+
+        $user->assignRole($role);
+
+        $this->assertTrue($user->hasRole('editor'));
     }
 }
