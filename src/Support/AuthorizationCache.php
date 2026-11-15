@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Psr\SimpleCache\InvalidArgumentException;
-use Teksite\Authorize\Models\Permission;
-use Teksite\Authorize\Models\Role;
+
 
 class AuthorizationCache
 {
@@ -92,14 +91,14 @@ class AuthorizationCache
     }
 
 
-    public static function forgetPermission(Permission $permission): void
+    public static function forgetPermission(): void
     {
         self::forgetPermissionGates();
         self::bump();
     }
 
 
-    public static function forgetRole(Role $role): void
+    public static function forgetRole(): void
     {
         self::bump();
     }
@@ -107,6 +106,8 @@ class AuthorizationCache
 
     /**
      * Targeted flush for holders of a role. Observers use bump() instead.
+     *
+     * @throws InvalidArgumentException
      */
     public static function forgetRoleModels(int $roleId): void
     {
@@ -116,6 +117,8 @@ class AuthorizationCache
 
     /**
      * Targeted flush for models that hold a permission directly.
+     *
+     * @throws InvalidArgumentException
      */
     public static function forgetPermissionModels(int $permissionId): void
     {
@@ -138,12 +141,15 @@ class AuthorizationCache
     /**
      * Forget caches of models directly assigned to a permission.
      */
-    public static function forgetPermissionRolePivot(int $permissionId, int $roleId): void
+    public static function forgetPermissionRolePivot(): void
     {
         self::bump();
     }
 
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public static function forgetRoleModelPivot(int $roleId): void
     {
         self::forgetRoleModels($roleId);
