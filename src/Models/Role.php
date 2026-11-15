@@ -13,7 +13,7 @@ use Teksite\Authorize\Factories\RoleFactory;
 
 
 #[UseFactory(RoleFactory::class)]
-#[Fillable(['title', 'description' ,'hierarchy'])]
+#[Fillable(['title', 'description', 'hierarchy'])]
 class Role extends Model
 {
     /** @use HasFactory<RoleFactory> */
@@ -49,7 +49,7 @@ class Role extends Model
      */
     public function permissions(): BelongsToMany
     {
-        return $this->belongsToMany(Permission::class, 'auth_permission_role');
+        return $this->belongsToMany(Permission::class, 'auth_permission_role')->using(PermissionRole::class);
     }
 
     public function users(): MorphToMany
