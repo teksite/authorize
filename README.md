@@ -1323,8 +1323,8 @@ After such changes, clear the cache manually:
 use Teksite\Authorize\Support\AuthorizationCache;
 
 // a role or permission changed
-AuthorizationCache::forgetRole($role);
-AuthorizationCache::forgetPermission($permission);
+AuthorizationCache::forgetRole();
+AuthorizationCache::forgetPermission();
 
 // a single model changed
 $user->clearAuthorizationCache();
